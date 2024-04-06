@@ -164,6 +164,8 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
         if (suiteContext.get().isAuthServerMigrationEnabled()) {
             commands.add("--hostname-strict=false");
             commands.add("--hostname-strict-https=false");
+        } else { // Do not set management port for older versions of Keycloak for migration tests - available since Keycloak ~22
+            commands.add("--http-management-port=" + configuration.getManagementPort());
         }
 
         if (configuration.getRoute() != null) {
@@ -193,8 +195,7 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
 
         // only run build during first execution of the server (if the DB is specified), restarts or when running cluster tests
         if (restart.get() || "ha".equals(cacheMode) || shouldSetUpDb.get() || configuration.getFipsMode() != FipsMode.DISABLED) {
-            commands.removeIf("--optimized"::equals);
-            commands.add("--http-relative-path=/auth");
+            prepareCommandsForRebuilding(commands);
 
             if ("local".equals(cacheMode)) {
                 commands.add("--cache=local");
@@ -211,6 +212,15 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
         addFeaturesOption(commands);
 
         return commands;
+    }
+
+    /**
+     * When enabling automatic rebuilding of the image, the `--optimized` argument must be removed,
+     * and all original build time parameters must be added.
+     */
+    private static void prepareCommandsForRebuilding(List<String> commands) {
+        commands.removeIf("--optimized"::equals);
+        commands.add("--http-relative-path=/auth");
     }
 
     protected void addFeaturesOption(List<String> commands) {
@@ -237,6 +247,9 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
                 break;
             }
         }
+
+        // enabling or disabling features requires rebuilding the image
+        prepareCommandsForRebuilding(commands);
 
         commands.add(featuresOption.toString());
     }

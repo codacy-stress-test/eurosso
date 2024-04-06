@@ -991,12 +991,6 @@ public class TokenManager {
             token.setAcr(acr);
         }
 
-        String authTime = session.getNote(AuthenticationManager.AUTH_TIME);
-        if (authTime != null) {
-            token.setAuthTime(Integer.parseInt(authTime));
-        }
-
-
         token.setSessionState(session.getId());
         ClientScopeModel offlineAccessScope = KeycloakModelUtils.getClientScopeByName(realm, OAuth2Constants.OFFLINE_ACCESS);
         boolean offlineTokenRequested = offlineAccessScope == null ? false
@@ -1150,8 +1144,9 @@ public class TokenManager {
             if (offlineTokenRequested) {
                 UserSessionManager sessionManager = new UserSessionManager(session);
                 if (!sessionManager.isOfflineTokenAllowed(clientSessionCtx)) {
+                    event.detail(Details.REASON, "Offline tokens not allowed for the user or client");
                     event.error(Errors.NOT_ALLOWED);
-                    throw new ErrorResponseException("not_allowed", "Offline tokens not allowed for the user or client", Response.Status.BAD_REQUEST);
+                    throw new ErrorResponseException(Errors.NOT_ALLOWED, "Offline tokens not allowed for the user or client", Response.Status.BAD_REQUEST);
                 }
                 refreshToken.type(TokenUtil.TOKEN_TYPE_OFFLINE);
                 if (realm.isOfflineSessionMaxLifespanEnabled()) {
@@ -1195,7 +1190,6 @@ public class TokenManager {
             idToken.issuedFor(accessToken.getIssuedFor());
             idToken.issuer(accessToken.getIssuer());
             idToken.setNonce(clientSessionCtx.getAttribute(OIDCLoginProtocol.NONCE_PARAM, String.class));
-            idToken.setAuthTime(accessToken.getAuthTime());
             idToken.setSessionState(accessToken.getSessionState());
             idToken.expiration(accessToken.getExpiration());
 

@@ -71,8 +71,11 @@ shift
 goto READ-ARGS
 
 :MAIN
+
+setlocal EnableDelayedExpansion
+
 if not "x%JAVA_OPTS%" == "x" (
-  echo "JAVA_OPTS already set in environment; overriding default settings with values: %JAVA_OPTS%"
+  echo "JAVA_OPTS already set in environment; overriding default settings"
 ) else (
   rem The defaults set up Keycloak with '-XX:+UseParallelGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90' which proved to provide a good throughput and efficiency in the total memory allocation and CPU overhead.
   rem If the memory is not used, it will be freed. See https://developers.redhat.com/blog/2017/04/04/openjdk-and-containers for details.
@@ -83,23 +86,23 @@ if not "x%JAVA_OPTS%" == "x" (
   if "x%JAVA_OPTS_KC_HEAP%" == "x" (
     set "JAVA_OPTS_KC_HEAP=-XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20"
 
-    if "%KC_RUN_IN_CONTAINER%" == "true" (
+    if "!KC_RUN_IN_CONTAINER!" == "true" (
       rem Maximum utilization of the heap is set to 70% of the total container memory
       rem Initial heap size is set to 50% of the total container memory in order to reduce GC executions
-      set "JAVA_OPTS_KC_HEAP=%JAVA_OPTS_KC_HEAP% -XX:MaxRAMPercentage=70 -XX:MinRAMPercentage=70 -XX:InitialRAMPercentage=50"
+      set "JAVA_OPTS_KC_HEAP=!JAVA_OPTS_KC_HEAP! -XX:MaxRAMPercentage=70 -XX:MinRAMPercentage=70 -XX:InitialRAMPercentage=50"
     ) else (
-      set "JAVA_OPTS_KC_HEAP=%JAVA_OPTS_KC_HEAP% -Xms64m -Xmx512m"
+      set "JAVA_OPTS_KC_HEAP=!JAVA_OPTS_KC_HEAP! -Xms64m -Xmx512m"
     )
 
-    set "JAVA_OPTS=%JAVA_OPTS% %JAVA_OPTS_KC_HEAP%"
+    set "JAVA_OPTS=!JAVA_OPTS! !JAVA_OPTS_KC_HEAP!"
   ) else (
-    echo "JAVA_OPTS_KC_HEAP already set in environment; overriding default settings with values: %JAVA_OPTS_KC_HEAP%"
+    echo "JAVA_OPTS_KC_HEAP already set in environment; overriding default settings"
   )
 )
 
 @REM See also https://github.com/wildfly/wildfly-core/blob/7e5624cf92ebe4b64a4793a8c0b2a340c0d6d363/core-feature-pack/common/src/main/resources/content/bin/common.sh#L57-L60
 if not "x%JAVA_ADD_OPENS%" == "x" (
-  echo "JAVA_ADD_OPENS already set in environment; overriding default settings with values: %JAVA_ADD_OPENS%"
+  echo "JAVA_ADD_OPENS already set in environment; overriding default settings"
 ) else (
   set "JAVA_ADD_OPENS=--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.security=ALL-UNNAMED"
 )
@@ -107,14 +110,14 @@ set "JAVA_OPTS=%JAVA_OPTS% %JAVA_ADD_OPENS%"
 
 @REM Set the default locale for the JVM to English to prevent locale-specific character variations
 if not "x%JAVA_LOCALE%" == "x" (
-  echo "JAVA_LOCALE already set in environment; overriding default settings with values: %JAVA_LOCALE%"
+  echo "JAVA_LOCALE already set in environment; overriding default settings"
 ) else (
   set "JAVA_LOCALE=-Duser.language=en -Duser.country=US"
 )
 set "JAVA_OPTS=%JAVA_OPTS% %JAVA_LOCALE%"
 
 if not "x%JAVA_OPTS_APPEND%" == "x" (
-  echo "Appending additional Java properties to JAVA_OPTS: %JAVA_OPTS_APPEND%"
+  echo "Appending additional Java properties to JAVA_OPTS"
   set JAVA_OPTS=%JAVA_OPTS% %JAVA_OPTS_APPEND%
 )
 
@@ -165,8 +168,6 @@ if "x%JAVA%" == "x" (
 set CLASSPATH_OPTS="%DIRNAME%..\lib\quarkus-run.jar"
 
 set JAVA_RUN_OPTS=%JAVA_OPTS% -Dkc.home.dir="%DIRNAME%.." -Djboss.server.config.dir="%DIRNAME%..\conf" -Dkeycloak.theme.dir="%DIRNAME%..\themes" %SERVER_OPTS% -cp %CLASSPATH_OPTS% io.quarkus.bootstrap.runner.QuarkusEntryPoint %CONFIG_ARGS%
-
-SetLocal EnableDelayedExpansion
 
 set OPTIMIZED_OPTION=--optimized
 set HELP_LONG_OPTION=--help

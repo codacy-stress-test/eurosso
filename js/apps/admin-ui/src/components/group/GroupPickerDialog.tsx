@@ -226,18 +226,20 @@ export const GroupPickerDialog = ({
             .slice(groupId ? first : 0, max + (groupId ? first : 0))
             .map((group: SelectableGroup) => (
               <Fragment key={group.id}>
-                <GroupRow
-                  key={group.id}
-                  group={group}
-                  isRowDisabled={isRowDisabled}
-                  onSelect={setGroupId}
-                  type={type}
-                  isSearching={isSearching}
-                  setIsSearching={setIsSearching}
-                  selectedRows={selectedRows}
-                  setSelectedRows={setSelectedRows}
-                  canBrowse={canBrowse}
-                />
+                {(!isSearching || group.name?.includes(filter)) && (
+                  <GroupRow
+                    key={group.id}
+                    group={group}
+                    isRowDisabled={isRowDisabled}
+                    onSelect={setGroupId}
+                    type={type}
+                    isSearching={isSearching}
+                    setIsSearching={setIsSearching}
+                    selectedRows={selectedRows}
+                    setSelectedRows={setSelectedRows}
+                    canBrowse={canBrowse}
+                  />
+                )}
                 {isSearching &&
                   group.subGroups?.map((g) => (
                     <GroupRow
@@ -326,7 +328,7 @@ const GroupRow = ({
             aria-label={group.name}
             checked={group.checked}
             isDisabled={isRowDisabled(group)}
-            onChange={(checked) => {
+            onChange={(_event, checked) => {
               group.checked = checked;
               let newSelectedRows: SelectableGroup[] = [];
               if (!group.checked) {

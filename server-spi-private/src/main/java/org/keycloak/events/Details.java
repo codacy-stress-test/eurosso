@@ -63,6 +63,8 @@ public interface Details {
     String REQUESTED_ISSUER = "requested_issuer";
     String REQUESTED_SUBJECT = "requested_subject";
     String RESTART_AFTER_TIMEOUT = "restart_after_timeout";
+    String REDIRECTED_TO_CLIENT = "redirected_to_client";
+    String LOGIN_RETRY = "login_retry";
 
     String CONSENT = "consent";
     String CONSENT_VALUE_NO_CONSENT_REQUIRED = "no_consent_required"; // No consent is required by client
@@ -91,4 +93,7 @@ public interface Details {
 
     String NOT_BEFORE = "not_before";
     String NUM_FAILURES = "num_failures";
+
+    String LOGOUT_TRIGGERED_BY_ACTION_TOKEN = "logout_triggered_by_action_token";
+    String LOGOUT_TRIGGERED_BY_REQUIRED_ACTION = "logout_triggered_by_required_action";
 }
