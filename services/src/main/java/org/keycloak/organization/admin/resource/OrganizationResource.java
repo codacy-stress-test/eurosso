@@ -17,6 +17,10 @@
 
 package org.keycloak.organization.admin.resource;
 
+import java.util.Optional;
+import java.util.Set;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import jakarta.ws.rs.BadRequestException;
@@ -29,12 +33,16 @@ import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.OrganizationDomainModel;
 import org.keycloak.models.OrganizationModel;
 import org.keycloak.organization.OrganizationProvider;
+import org.keycloak.representations.idm.OrganizationDomainRepresentation;
 import org.keycloak.representations.idm.OrganizationRepresentation;
 import org.keycloak.services.resources.admin.AdminEventBuilder;
 import org.keycloak.services.resources.admin.permissions.AdminPermissionEvaluator;
@@ -67,15 +75,26 @@ public class OrganizationResource {
             throw new BadRequestException();
         }
 
-        OrganizationModel model = provider.create(organization.getName());
+        Set<String> domains = organization.getDomains().stream().map(OrganizationDomainRepresentation::getName).collect(Collectors.toSet());
+        OrganizationModel model = provider.create(organization.getName(), domains);
+
+        toModel(organization, model);
 
         return Response.created(session.getContext().getUri().getAbsolutePathBuilder().path(model.getId()).build()).build();
     }
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public Stream<OrganizationRepresentation> get() {
-        return provider.getAllStream().map(this::toRepresentation);
+    public Stream<OrganizationRepresentation> search(
+            @Parameter(description = "A String representing an organization internet domain") @QueryParam("domain-name") String domainName
+    ) {
+        if (domainName == null || domainName.trim().isEmpty()) {
+            return provider.getAllStream().map(this::toRepresentation);
+        } else {
+            // search for the organization associated with the given domain
+            OrganizationModel org = provider.getByDomainName(domainName.trim());
+            return org == null ? Stream.empty() : Stream.of(toRepresentation(org));
+        }
     }
 
     @Path("{id}")
@@ -106,7 +125,6 @@ public class OrganizationResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response update(@PathParam("id") String id, OrganizationRepresentation organization) {
         OrganizationModel model = getOrganization(id);
-
         toModel(organization, model);
 
         return Response.noContent().build();
@@ -115,9 +133,15 @@ public class OrganizationResource {
     @Path("{id}/members")
     public OrganizationMemberResource members(@PathParam("id") String id) {
         OrganizationModel organization = getOrganization(id);
+        session.setAttribute(OrganizationModel.class.getName(), organization);
         return new OrganizationMemberResource(session, organization, auth, adminEvent);
     }
 
+    @Path("{id}/identity-provider")
+    public OrganizationIdentityProviderResource identityProvider(@PathParam("id") String id) {
+        return new OrganizationIdentityProviderResource(session, getOrganization(id), auth, adminEvent);
+    }
+    
     private OrganizationModel getOrganization(String id) {
         if (id == null) {
             throw new BadRequestException();
@@ -141,8 +165,18 @@ public class OrganizationResource {
 
         rep.setId(model.getId());
         rep.setName(model.getName());
+        rep.setAttributes(model.getAttributes());
+        model.getDomains().filter(Objects::nonNull).map(this::toRepresentation)
+                .forEach(rep::addDomain);
 
         return rep;
+    }
+
+    private OrganizationDomainRepresentation toRepresentation(OrganizationDomainModel model) {
+        OrganizationDomainRepresentation representation = new OrganizationDomainRepresentation();
+        representation.setName(model.getName());
+        representation.setVerified(model.getVerified());
+        return representation;
     }
 
     private OrganizationModel toModel(OrganizationRepresentation rep, OrganizationModel model) {
@@ -151,7 +185,15 @@ public class OrganizationResource {
         }
 
         model.setName(rep.getName());
+        model.setAttributes(rep.getAttributes());
+        model.setDomains(Optional.ofNullable(rep.getDomains()).orElse(Set.of()).stream()
+                    .map(this::toModel)
+                    .collect(Collectors.toSet()));
 
         return model;
+    }
+
+    private OrganizationDomainModel toModel(OrganizationDomainRepresentation domainRepresentation) {
+        return new OrganizationDomainModel(domainRepresentation.getName(), domainRepresentation.isVerified());
     }
 }

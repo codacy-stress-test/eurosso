@@ -17,19 +17,39 @@
 
 package org.keycloak.organization.jpa;
 
+import org.keycloak.models.GroupModel;
+
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.keycloak.models.ModelValidationException;
+import org.keycloak.models.OrganizationDomainModel;
 import org.keycloak.models.OrganizationModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.jpa.JpaModel;
+import org.keycloak.models.jpa.entities.OrganizationDomainEntity;
 import org.keycloak.models.jpa.entities.OrganizationEntity;
+import org.keycloak.organization.OrganizationProvider;
+
+import java.util.List;
 
 public final class OrganizationAdapter implements OrganizationModel, JpaModel<OrganizationEntity> {
 
     private final RealmModel realm;
     private final OrganizationEntity entity;
+    private final OrganizationProvider provider;
+    private GroupModel group;
 
-    public OrganizationAdapter(RealmModel realm, OrganizationEntity entity) {
+    public OrganizationAdapter(RealmModel realm, OrganizationEntity entity, OrganizationProvider provider) {
         this.realm = realm;
         this.entity = entity;
+        this.provider = provider;
     }
 
     @Override
@@ -56,6 +76,59 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
     }
 
     @Override
+    public void setAttributes(Map<String, List<String>> attributes) {
+        if (attributes == null) {
+            return;
+        }
+        Set<String> attrsToRemove = getAttributes().keySet();
+        attrsToRemove.removeAll(attributes.keySet());
+        attrsToRemove.forEach(group::removeAttribute);
+        attributes.forEach(group::setAttribute);
+    }
+
+    @Override
+    public Map<String, List<String>> getAttributes() {
+        return getGroup().getAttributes();
+    }
+
+    @Override
+    public Stream<OrganizationDomainModel> getDomains() {
+        return entity.getDomains().stream().map(this::toModel);
+    }
+
+    @Override
+    public void setDomains(Set<OrganizationDomainModel> domains) {
+        if (domains == null || domains.isEmpty()) {
+            throw new ModelValidationException("You must provide at least one domain");
+        }
+
+        Map<String, OrganizationDomainModel> modelMap = domains.stream()
+                .peek(this::isDomainInUse)
+                .collect(Collectors.toMap(OrganizationDomainModel::getName, Function.identity()));
+
+        for (OrganizationDomainEntity domainEntity : new HashSet<>(this.entity.getDomains())) {
+            // update the existing domain (for now, only the verified flag can be changed).
+            if (modelMap.containsKey(domainEntity.getName())) {
+                domainEntity.setVerified(modelMap.get(domainEntity.getName()).getVerified());
+                modelMap.remove(domainEntity.getName());
+            }
+            // remove domain that is not found in the new set.
+            else {
+                this.entity.removeDomain(domainEntity);
+            }
+        }
+
+        // create the remaining domains.
+        for (OrganizationDomainModel model : modelMap.values()) {
+            OrganizationDomainEntity domainEntity = new OrganizationDomainEntity();
+            domainEntity.setName(model.getName().toLowerCase());
+            domainEntity.setVerified(model.getVerified());
+            domainEntity.setOrganization(this.entity);
+            this.entity.addDomain(domainEntity);
+        }
+    }
+
+    @Override
     public OrganizationEntity getEntity() {
         return entity;
     }
@@ -74,5 +147,23 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
                 .append(",")
                 .append("groupId=")
                 .append(getGroupId()).toString();
+    }
+
+    private OrganizationDomainModel toModel(OrganizationDomainEntity entity) {
+        return new OrganizationDomainModel(entity.getName(), entity.isVerified());
+    }
+
+    private void isDomainInUse(OrganizationDomainModel domainRep) {
+        OrganizationModel orgModel = provider.getByDomainName(domainRep.getName());
+        if (orgModel != null && !Objects.equals(getId(), orgModel.getId())) {
+            throw new ModelValidationException("Domain " + domainRep.getName() + " is already linked to another organization");
+        }
+    }
+
+    private GroupModel getGroup() {
+        if (group == null) {
+            group = realm.getGroupById(getGroupId());
+        }
+        return group;
     }
 }
