@@ -94,7 +94,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.function.Function;
 
 import static org.keycloak.models.UserModel.RequiredAction.UPDATE_PASSWORD;
 
@@ -133,6 +135,7 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
     protected UserModel user;
 
     protected final Map<String, Object> attributes = new HashMap<>();
+    private Function<Map<String, Object>, Map<String, Object>> attributeMapper;
 
     public FreeMarkerLoginFormsProvider(KeycloakSession session) {
         this.session = session;
@@ -262,6 +265,7 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
                 attributes.put("email", emailBean);
                 break;
             case LOGIN_IDP_LINK_CONFIRM:
+            case LOGIN_IDP_LINK_CONFIRM_OVERRIDE:
             case LOGIN_IDP_LINK_EMAIL:
                 BrokeredIdentityContext brokerContext = (BrokeredIdentityContext) this.attributes.get(IDENTITY_PROVIDER_BROKER_CONTEXT);
                 String idpAlias = brokerContext.getIdpConfig().getAlias();
@@ -547,6 +551,7 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
      */
     protected Response processTemplate(Theme theme, String templateName, Locale locale) {
         try {
+            Map<String, Object> attributes = Optional.ofNullable(attributeMapper).orElse(Function.identity()).apply(this.attributes);
             String result = freeMarker.processTemplate(attributes, templateName, theme);
             Response.ResponseBuilder builder = Response.status(status == null ? Response.Status.OK : status).type(MediaType.TEXT_HTML_UTF_8_TYPE).language(locale).entity(result);
             for (Map.Entry<String, String> entry : httpResponseHeaders.entrySet()) {
@@ -650,6 +655,11 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
     @Override
     public Response createIdpLinkConfirmLinkPage() {
         return createResponse(LoginFormsPages.LOGIN_IDP_LINK_CONFIRM);
+    }
+
+    @Override
+    public Response createIdpLinkConfirmOverrideLinkPage() {
+        return createResponse(LoginFormsPages.LOGIN_IDP_LINK_CONFIRM_OVERRIDE);
     }
 
     @Override
@@ -903,8 +913,15 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
         return this;
     }
 
+    @Override
     public LoginFormsProvider setAuthContext(AuthenticationFlowContext context) {
         this.context = context;
+        return this;
+    }
+
+    @Override
+    public LoginFormsProvider setAttributeMapper(Function<Map<String, Object>, Map<String, Object>> mapper) {
+        this.attributeMapper = mapper;
         return this;
     }
 

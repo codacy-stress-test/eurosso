@@ -25,6 +25,7 @@ public class Messages {
     public static final String LOGIN_TIMEOUT = "loginTimeout";
 
     public static final String REAUTHENTICATE = "reauthenticate";
+    public static final String AUTHENTICATE_STRONG = "authenticateStrong";
 
     public static final String INVALID_USER = "invalidUserMessage";
 
@@ -87,6 +88,8 @@ public class Messages {
     public static final String FEDERATED_IDENTITY_UNAVAILABLE = "federatedIdentityUnavailableMessage";
 
     public static final String FEDERATED_IDENTITY_CONFIRM_LINK_MESSAGE = "federatedIdentityConfirmLinkMessage";
+
+    public static final String FEDERATED_IDENTITY_CONFIRM_OVERRIDE_MESSAGE = "federatedIdentityConfirmOverrideMessage";
 
     public static final String FEDERATED_IDENTITY_CONFIRM_REAUTHENTICATE_MESSAGE = "federatedIdentityConfirmReauthenticateMessage";
 

@@ -1,12 +1,13 @@
 {
-  "name": "ui-shared",
+  "name": "@keycloak/keycloak-ui-shared",
+  "version": "999.0.0-SNAPSHOT",
   "type": "module",
-  "main": "./dist/ui-shared.js",
-  "types": "./dist/ui-shared.d.ts",
+  "main": "./dist/keycloak-ui-shared.js",
+  "types": "./dist/keycloak-ui-shared.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/ui-shared.js",
-      "types": "./dist/ui-shared.d.ts"
+      "import": "./dist/keycloak-ui-shared.js",
+      "types": "./dist/keycloak-ui-shared.d.ts"
     }
   },
   "files": [
@@ -43,7 +44,9 @@
     "@keycloak/keycloak-admin-client": "workspace:*",
     "@patternfly/react-core": "^5.2.3",
     "@patternfly/react-icons": "^5.2.1",
-    "i18next": "^23.11.1",
+    "@patternfly/react-styles": "^5.2.1",
+    "i18next": "^23.11.2",
+    "keycloak-js": "workspace:*",
     "lodash-es": "^4.17.21",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -52,13 +55,13 @@
   },
   "devDependencies": {
     "@types/lodash-es": "^4.17.12",
-    "@types/react": "^18.2.77",
+    "@types/react": "^18.2.79",
     "@types/react-dom": "^18.2.25",
     "@vitejs/plugin-react-swc": "^3.6.0",
     "rollup-plugin-peer-deps-external": "^2.2.4",
-    "vite": "^5.2.8",
+    "vite": "^5.2.9",
     "vite-plugin-checker": "^0.6.4",
-    "vite-plugin-dts": "^3.8.1",
+    "vite-plugin-dts": "^3.8.3",
     "vite-plugin-lib-inject-css": "^2.0.1",
     "vitest": "^1.5.0"
   }

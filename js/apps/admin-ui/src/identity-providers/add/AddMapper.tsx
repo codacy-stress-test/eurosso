@@ -14,7 +14,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 
-import { TextControl } from "ui-shared";
+import { TextControl } from "@keycloak/keycloak-ui-shared";
 import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
@@ -152,7 +152,7 @@ export default function AddMapper() {
 
       setMapperTypes(mappers);
     },
-    [],
+    [id],
   );
 
   const setupForm = (mapper: IdentityProviderMapperRepresentation) => {

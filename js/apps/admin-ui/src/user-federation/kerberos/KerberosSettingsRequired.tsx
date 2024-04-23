@@ -1,4 +1,4 @@
-import { FormGroup, Switch, TextInput } from "@patternfly/react-core";
+import { FormGroup, Switch } from "@patternfly/react-core";
 import {
   Select,
   SelectOption,
@@ -13,7 +13,7 @@ import {
   useWatch,
 } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem, TextControl } from "ui-shared";
+import { HelpItem, TextControl } from "@keycloak/keycloak-ui-shared";
 import { adminClient } from "../../admin-client";
 import { FormAccess } from "../../components/form/FormAccess";
 import { WizardSectionHeader } from "../../components/wizard-section-header/WizardSectionHeader";
@@ -61,17 +61,21 @@ export const KerberosSettingsRequired = ({
       {/* Required settings */}
       <FormAccess role="manage-realm" isHorizontal>
         {/* These hidden fields are required so data object written back matches data retrieved */}
-        <TextInput
-          hidden
+        <input
+          type="hidden"
           defaultValue="kerberos"
           {...form.register("providerId")}
         />
-        <TextInput
-          hidden
+        <input
+          type="hidden"
           defaultValue="org.keycloak.storage.UserStorageProvider"
           {...form.register("providerType")}
         />
-        <TextInput hidden defaultValue={realm} {...form.register("parentId")} />
+        <input
+          type="hidden"
+          defaultValue={realm}
+          {...form.register("parentId")}
+        />
         <TextControl
           name="name"
           label={t("uiDisplayName")}

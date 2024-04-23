@@ -18,6 +18,21 @@ In {project_name} 24 the default hashing iterations for PBKDF2 were increased fr
 better security, with almost the same CPU time as previous releases of {project_name}. One downside is Argon2 requires more
 memory, which is a requirement to be resistant against GPU attacks. The defaults for Argon2 in {project_name} requires 7MB
 per-hashing request.
+To prevent excessive memory and CPU usage, the parallel computation of hashes by Argon2 is by default limited to the number of cores available to the JVM.
+
+= New Hostname options
+
+In response to the complexity and lack of intuitiveness experienced with previous hostname configuration settings, we are proud to introduce Hostname v2 options.
+
+We have listened to your feedback, tackled the tricky issues, and created a smoother experience for managing hostname configuration.
+Be aware that even the behavior behind these options has changed and requires your attention - if you are dealing with custom hostname settings.
+
+Hostname v2 options are supported by default, as the old hostname options are deprecated and will be removed in the following releases.
+You should migrate to them as soon as possible.
+
+New options are activated by default, so {project_name} will not recognize the old ones.
+
+For information on how to migrate, see the link:{upgradingguide_link}[{upgradingguide_name}].
 
 = Cookies updates
 
@@ -104,9 +119,32 @@ By default, the syslog handler is disabled, but when enabled, it sends all log e
 
 For more information, see the https://www.keycloak.org/server/logging[Configuring logging] guide.
 
+= Change to class `EnvironmentDependentProviderFactory`
+
+The method `EnvironmentDependentProviderFactory.isSupported()` was deprecated for several releases and has now been removed.
+
+For more details, see the link:{upgradingguide_link}[{upgradingguide_name}].
+
 = All `cache` options are runtime
 
 It is now possible to specify the `cache`, `cache-stack`, and `cache-config-file` options during runtime.
 This eliminates the need to execute the build phase and rebuild your image due to them.
+
+For more details, see the link:{upgradingguide_link}[{upgradingguide_name}].
+
+= Removing deprecated methods from `AccessToken`, `IDToken`, and `JsonWebToken` classes
+
+In this release, we are finally removing deprecated methods from the following classes:
+
+* `AccessToken`
+* `IDToken`
+* `JsonWebToken`
+
+For more details, see the link:{upgradingguide_link}[{upgradingguide_name}].
+
+= Method `getExp` added to `SingleUseObjectKeyModel`
+
+As a consequence of the removal of deprecated methods from `AccessToken`, `IDToken`, and `JsonWebToken`,
+the `SingleUseObjectKeyModel` also changed to keep consistency with the method names related to expiration values.
 
 For more details, see the link:{upgradingguide_link}[{upgradingguide_name}].

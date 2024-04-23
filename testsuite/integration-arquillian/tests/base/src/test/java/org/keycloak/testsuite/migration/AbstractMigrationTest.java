@@ -412,6 +412,7 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
             testHS512KeyCreated(migrationRealm);
             testHS512KeyCreated(migrationRealm2);
             testClientAttributes(migrationRealm);
+            testDeleteCredentialActionAvailable(migrationRealm);
         }
         if (testLdapUseTruststoreSpiMigration) {
             testLdapUseTruststoreSpiMigration(migrationRealm2);
@@ -855,7 +856,7 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
     private void assertOfflineToken(String offlineToken) {
         RefreshToken offlineTokenParsed = oauth.parseRefreshToken(offlineToken);
         assertEquals(TokenUtil.TOKEN_TYPE_OFFLINE, offlineTokenParsed.getType());
-        assertEquals(0, offlineTokenParsed.getExpiration());
+        assertNull(offlineTokenParsed.getExp());
         assertTrue(TokenUtil.hasScope(offlineTokenParsed.getScope(), OAuth2Constants.OFFLINE_ACCESS));
     }
 
@@ -937,6 +938,8 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
             for (RequiredActionProviderRepresentation action : actions) {
                 if (action.getAlias().equals("update_user_locale")) {
                     assertEquals(1000, action.getPriority());
+                } else if (action.getAlias().equals("delete_credential")) {
+                    assertEquals(100, action.getPriority());
                 } else {
                     assertEquals(priority, action.getPriority());
                 }
@@ -1281,5 +1284,16 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
                 .stream().map(ClientRepresentation::getClientId)
                 .collect(Collectors.toList());
         Assert.assertEquals(Collections.singletonList(client.getClientId()), clientIds);
+    }
+
+    private void testDeleteCredentialActionAvailable(RealmResource realm) {
+        RequiredActionProviderRepresentation rep = realm.flows().getRequiredAction("delete_credential");
+        assertNotNull(rep);
+        assertEquals("delete_credential", rep.getAlias());
+        assertEquals("delete_credential", rep.getProviderId());
+        assertEquals("Delete Credential", rep.getName());
+        assertEquals(100, rep.getPriority());
+        assertTrue(rep.isEnabled());
+        assertFalse(rep.isDefaultAction());
     }
 }

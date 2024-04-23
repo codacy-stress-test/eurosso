@@ -3,7 +3,11 @@ import { ExpandableSection } from "@patternfly/react-core";
 import { useState } from "react";
 import { FormProvider, useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { NumberControl, SelectControl, TextControl } from "ui-shared";
+import {
+  NumberControl,
+  SelectControl,
+  TextControl,
+} from "@keycloak/keycloak-ui-shared";
 import { DefaultSwitchControl } from "../../components/SwitchControl";
 
 import "./discovery-settings.css";
@@ -282,7 +286,7 @@ const Fields = ({ readOnly }: DescriptorSettingsProps) => {
             {useMetadataDescriptorUrl !== "true" && (
               <TextControl
                 name="config.signingCertificate"
-                label="validatingX509Certs"
+                label={t("validatingX509Certs")}
                 readOnly={readOnly}
               />
             )}

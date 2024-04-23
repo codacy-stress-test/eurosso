@@ -45,8 +45,8 @@
         <jboss.snapshots.repo.id>jboss-snapshots-repository</jboss.snapshots.repo.id>
         <jboss.snapshots.repo.url>https://s01.oss.sonatype.org/content/repositories/snapshots/</jboss.snapshots.repo.url>
 
-        <quarkus.version>3.8.3</quarkus.version>
-        <quarkus.build.version>3.8.3</quarkus.build.version>
+        <quarkus.version>3.8.4</quarkus.version>
+        <quarkus.build.version>3.8.4</quarkus.build.version>
 
         <project.build-time>${timestamp}</project.build-time>
 
@@ -80,8 +80,6 @@
         <jboss.as.subsystem.test.version>7.5.22.Final-redhat-1</jboss.as.subsystem.test.version>
 
         <!-- Versions used mostly for Undertow server, aligned with WildFly -->
-        <jboss.aesh.version>0.66.19</jboss.aesh.version>
-        <apache.httpcomponents.version>4.5.14</apache.httpcomponents.version>
         <jboss.dmr.version>1.5.1.Final</jboss.dmr.version>
 
         <!-- TODO Are these correct versions? -->
@@ -244,8 +242,8 @@
         <server.output.dir.version>${project.version}</server.output.dir.version>
 
         <!-- Frontend -->
-        <node.version>v20.12.0</node.version>
-        <pnpm.version>8.15.5</pnpm.version>
+        <node.version>v20.12.2</node.version>
+        <pnpm.version>9.0.1</pnpm.version>
         <pnpm.args.install>install --prefer-offline --frozen-lockfile --ignore-scripts</pnpm.args.install>
         <!-- The clean step is skipped on Windows -->
         <js.skip.clean>false</js.skip.clean>
@@ -750,11 +748,6 @@
                 <scope>test</scope>
             </dependency>
             <dependency>
-                <groupId>org.apache.httpcomponents</groupId>
-                <artifactId>httpclient</artifactId>
-                <version>${apache.httpcomponents.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>org.wildfly.common</groupId>
                 <artifactId>wildfly-common</artifactId>
                 <version>${wildfly.common.quarkus.aligned.version}</version>
@@ -947,11 +940,6 @@
                 <groupId>org.ops4j.pax.web</groupId>
                 <artifactId>pax-web-spi</artifactId>
                 <version>${pax.web.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.jboss.aesh</groupId>
-                <artifactId>aesh</artifactId>
-                <version>${jboss.aesh.version}</version>
             </dependency>
 
             <!-- keycloak -->

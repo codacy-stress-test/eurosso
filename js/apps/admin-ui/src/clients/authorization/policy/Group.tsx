@@ -5,7 +5,11 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { FormErrorText, HelpItem, TextControl } from "ui-shared";
+import {
+  FormErrorText,
+  HelpItem,
+  TextControl,
+} from "@keycloak/keycloak-ui-shared";
 
 import { adminClient } from "../../../admin-client";
 import { GroupPickerDialog } from "../../../components/group/GroupPickerDialog";
@@ -134,7 +138,7 @@ export const Group = () => {
                           name="extendChildren"
                           isChecked={field.value}
                           onChange={field.onChange}
-                          isDisabled={group.subGroups?.length === 0}
+                          isDisabled={group.subGroupCount === 0}
                         />
                       )}
                     />

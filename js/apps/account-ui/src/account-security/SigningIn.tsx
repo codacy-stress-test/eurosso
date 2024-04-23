@@ -6,32 +6,29 @@ import {
   DataListItem,
   DataListItemCells,
   DataListItemRow,
+  Dropdown,
+  DropdownItem,
+  MenuToggle,
   PageSection,
   Spinner,
   Split,
   SplitItem,
   Title,
 } from "@patternfly/react-core";
-import {
-  Dropdown,
-  DropdownItem,
-  KebabToggle,
-} from "@patternfly/react-core/deprecated";
+import { EllipsisVIcon } from "@patternfly/react-icons";
 import { CSSProperties, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { ContinueCancelModal, useAlerts } from "ui-shared";
-import { deleteCredentials, getCredentials } from "../api/methods";
+import { getCredentials } from "../api/methods";
 import {
   CredentialContainer,
   CredentialMetadataRepresentation,
-  CredentialRepresentation,
 } from "../api/representations";
 import { EmptyRow } from "../components/datalist/EmptyRow";
 import { Page } from "../components/page/Page";
 import { TFuncKey } from "../i18n";
+import { useEnvironment } from "../root/KeycloakContext";
 import { formatDate } from "../utils/formatDate";
 import { usePromise } from "../utils/usePromise";
-import { useEnvironment } from "../root/KeycloakContext";
 
 type MobileLinkProps = {
   title: string;
@@ -44,17 +41,27 @@ const MobileLink = ({ title, onClick, testid }: MobileLinkProps) => {
   return (
     <>
       <Dropdown
-        isPlain
-        position="right"
-        toggle={<KebabToggle onToggle={(_event, val) => setOpen(val)} />}
-        className="pf-v5-u-display-none-on-lg"
+        popperProps={{
+          position: "right",
+        }}
+        onOpenChange={(isOpen) => setOpen(isOpen)}
+        toggle={(toggleRef) => (
+          <MenuToggle
+            className="pf-v5-u-display-none-on-lg"
+            ref={toggleRef}
+            variant="plain"
+            onClick={() => setOpen(!open)}
+            isExpanded={open}
+          >
+            <EllipsisVIcon />
+          </MenuToggle>
+        )}
         isOpen={open}
-        dropdownItems={[
-          <DropdownItem key="1" onClick={onClick}>
-            {title}
-          </DropdownItem>,
-        ]}
-      />
+      >
+        <DropdownItem key="1" onClick={onClick}>
+          {title}
+        </DropdownItem>
+      </Dropdown>
       <Button
         variant="link"
         onClick={onClick}
@@ -70,16 +77,15 @@ const MobileLink = ({ title, onClick, testid }: MobileLinkProps) => {
 export const SigningIn = () => {
   const { t } = useTranslation();
   const context = useEnvironment();
-  const { addAlert, addError } = useAlerts();
   const { login } = context.keycloak;
 
   const [credentials, setCredentials] = useState<CredentialContainer[]>();
-  const [key, setKey] = useState(1);
-  const refresh = () => setKey(key + 1);
 
-  usePromise((signal) => getCredentials({ signal, context }), setCredentials, [
-    key,
-  ]);
+  usePromise(
+    (signal) => getCredentials({ signal, context }),
+    setCredentials,
+    [],
+  );
 
   const credentialRowCells = (
     credMetadata: CredentialMetadataRepresentation,
@@ -114,9 +120,6 @@ export const SigningIn = () => {
     }
     return items;
   };
-
-  const label = (credential: CredentialRepresentation) =>
-    credential.userLabel || t(credential.type as TFuncKey);
 
   if (!credentials) {
     return <Spinner />;
@@ -205,41 +208,19 @@ export const SigningIn = () => {
                               aria-labelledby={`cred-${meta.credential.id}`}
                             >
                               {container.removeable ? (
-                                <ContinueCancelModal
-                                  buttonTitle={t("delete")}
-                                  buttonTestRole="remove"
-                                  modalTitle={t("removeCred", {
-                                    name: label(meta.credential),
-                                  })}
-                                  continueLabel={t("confirm")}
-                                  cancelLabel={t("cancel")}
-                                  buttonVariant="danger"
-                                  onContinue={async () => {
-                                    try {
-                                      await deleteCredentials(
-                                        context,
-                                        meta.credential,
-                                      );
-                                      addAlert(
-                                        t("successRemovedMessage", {
-                                          userLabel: label(meta.credential),
-                                        }),
-                                      );
-                                      refresh();
-                                    } catch (error) {
-                                      addError(
-                                        t("errorRemovedMessage", {
-                                          userLabel: label(meta.credential),
-                                          error,
-                                        }).toString(),
-                                      );
-                                    }
+                                <Button
+                                  variant="danger"
+                                  data-testrole="remove"
+                                  onClick={() => {
+                                    login({
+                                      action:
+                                        "delete_credential:" +
+                                        meta.credential.id,
+                                    });
                                   }}
                                 >
-                                  {t("stopUsingCred", {
-                                    name: label(meta.credential),
-                                  })}
-                                </ContinueCancelModal>
+                                  {t("delete")}
+                                </Button>
                               ) : (
                                 <Button
                                   variant="secondary"

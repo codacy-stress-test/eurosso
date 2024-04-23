@@ -31,8 +31,12 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.jboss.aesh</groupId>
-            <artifactId>aesh</artifactId>
+            <groupId>info.picocli</groupId>
+            <artifactId>picocli</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-admin-cli</artifactId>
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
@@ -45,6 +49,11 @@
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.logging</groupId>
+            <artifactId>commons-logging-jboss-logging</artifactId>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

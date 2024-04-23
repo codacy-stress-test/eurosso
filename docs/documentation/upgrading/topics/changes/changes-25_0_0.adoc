@@ -1,3 +1,85 @@
+= New Hostname options
+
+Hostname v2 options are supported by default, as the old hostname options are deprecated and will be removed in the following releases.
+New options are activated by default, so {project_name} will not recognize the old options.
+
+List of necessary migrations:
+
+[%autowidth,cols="a,a"]
+|===
+| Old options | New options
+
+|`hostname <hostname>` +
+`hostname-url <url>` +
+`hostname-path <path>` +
+`hostname-port <port>`
+|`hostname <hostname/url>`
+|`hostname-admin <hostname>` +
+`hostname-admin-url <url>`
+|`hostname-admin <url>`
+|`hostname-strict-backchannel <true/false>`
+|`hostname-backchannel-dynamic <true/false>`
+|===
+
+As you can see, the `*-url` suffixes were removed for `hostname` and `hostname-admin` options.
+Option `hostname` accepts both hostname and URL, but `hostname-admin` accepts only full URL now.
+
+Additionally, there is no way to set `path` or `port` separately.
+You can achieve it by providing the full URL for the `hostname` and `hostname-admin` options.
+
+If the port is not part of the URL, it is dynamically resolved from the incoming request headers.
+
+HTTPS is no longer enforced unless it is part of `hostname` and `hostname-admin` URLs.
+If not specified, the used protocol (`http/https`) is dynamically resolved from the incoming request.
+The `hostname-strict-https` option is removed.
+
+[%autowidth,cols="a"]
+|===
+| Removed options
+
+|`hostname-url`
+|`hostname-admin-url`
+|`hostname-path`
+|`hostname-port`
+|`hostname-strict-backchannel`
+|`hostname-strict-https`
+|===
+
+NOTE: In order to use the old hostname options to have more time for migration, turn on the feature `hostname:v1`, e.g. `features=hostname:v1`.
+Be aware, that either `hostname:v1` or `hostname:v2` can be enabled, not both at the same time.
+
+== Examples
+
+.Simplified notation
+[source,bash]
+----
+# Hostname v1
+bin/kc.[sh|bat] start --hostname=mykeycloak.org --https-port=8543 --hostname-path=/auth --hostname-strict-https=true
+
+# Hostname v2
+bin/kc.[sh|bat] start --hostname=https://mykeycloak.org:8543/auth
+----
+As you can see in the example, all the parts of a URL can be now specified via single `hostname` option, which simplifies the hostname setup process.
+Notice that HTTPS is not enforced by the `hostname-strict-https` option, but by specifying it in the hostname URL.
+
+.Backchannel setting
+[source,bash]
+----
+# Hostname v1
+bin/kc.[sh|bat] start --hostname=mykeycloak.org --hostname-strict-backchannel=true
+
+# Hostname v2
+bin/kc.[sh|bat] start --hostname=mykeycloak.org --hostname-backchannel-dynamic=false
+----
+Be aware that there is a change in behavior if the same URL is to be used for both backend and frontend endpoints.
+Previously, in hostname v1, the backchannel URL was dynamically resolved from request headers.
+Therefore, to achieve the required results, you had to specify the `hostname-strict-backchannel=true`.
+
+For hostname v2, the backchannel URLs are already the same as the frontend ones.
+In order to dynamically resolve it from request headers, you need to set the `hostname-backchannel-dynamic=true` and provide a full URL for the `hostname` option.
+
+For more details and more comprehensive scenarios, see https://www.keycloak.org/server/hostname[Configuring the hostname (v2)].
+
 = Metrics for embedded caches enabled by default
 
 Metrics for the embedded caches are now enabled by default.
@@ -69,9 +151,9 @@ Options `cache`, `cache-stack`, and `cache-config-file` are no longer build opti
 This eliminates the need to execute the build phase and rebuild your image due to them.
 Be aware that they will not be recognized during the `build` phase, so you need to remove them.
 
-= kcadm Changes
+= kcadm and kcreg changes
 
-How kcadm parses and handles options and parameters has changed. Error messages from usage errors, the wrong option or parameter, may be slightly different than previous versions. Also usage errors will have an exit code of 2 instead of 1.
+How kcadm and kcreg parse and handle options and parameters has changed. Error messages from usage errors, the wrong option or parameter, may be slightly different than previous versions. Also usage errors will have an exit code of 2 instead of 1.
 
 = Removing custom user attribute indexes
 
@@ -165,3 +247,57 @@ bin/kc.[sh|bat] start --spi-group-jpa-escape-slashes-in-group-path=true
 The escape char is the tilde character `~`. The previous example results in the path `/top/group~/slash`. The escape marks the last slash is part of the name and not a hierarchy separator.
 
 The escaping is currently disabled by default because it represents a change in behavior. Nevertheless enabling escaping is recommended and it can be the default in future versions.
+
+= Change to class `EnvironmentDependentProviderFactory`
+
+The method `EnvironmentDependentProviderFactory.isSupported()` was deprecated for several releases and has now been removed.
+
+Instead, implement `isSupported(Config.Scope config)`.
+
+= Removal of the deprecated LinkedIn provider
+
+In version 22.0.2 the OAuh 2.0 social provider for LinkedIn was replaced by a new OpenId Connect implementation. The legacy provider was deprecated but not removed, just in case it was still functional in some existing realms. {project_name} 25.0.0 is definitely removing the old provider and its associated `linkedin-oauth` feature. From now on, the default `LinkedIn` social provider is the only option available.
+
+= Improved performance of `findGrantedResources` and `findGrantedOwnerResources` queries
+
+These queries performed poorly when the `RESOURCE_SERVER_RESOURCE` and `RESOURCE_SERVER_PERM_TICKET` tables had over 100k entries
+and users were granted access to over 1k resources. The queries were simplified and new indexes for the `requester` and `owner`
+columns were introduced.
+
+The new indexes are both applied to the `RESOURCE_SERVER_PERM_TICKET` table. If the table currently contains more than 300.000 entries,
+{project_name} will skip the creation of the indexes by default during the automatic schema migration, and will instead log the SQL statements
+on the console during migration. In this case, the statements must be run manually in the DB after {project_name}'s startup.
+
+See the link:{upgradingguide_link}[{upgradingguide_name}] for details on how to configure a different limit.
+
+= Removing deprecated methods from `AccessToken`, `IDToken`, and `JsonWebToken` classes
+
+The following methods were removed from the `AccessToken` class:
+
+* `expiration`. Use the `exp` method instead.
+* `notBefore`. Use the `nbf` method instead.
+* `issuedAt`. Use the `iat` method instead.
+
+The following methods were removed from the `IDToken` class:
+
+* `getAuthTime` and `setAuthTime`. Use the `getAuth_time` and `setAuth_time` methods, respectively.
+* `notBefore`. Use the `nbf` method instead.
+* `issuedAt`. Use the `iat` method instead.
+* `setSessionState`. Use the `setSessionId` method instead (See the details above in the section about `session_state` claim)
+
+The following methods were removed from the `JsonWebToken` class:
+
+* `expiration`. Use the `exp` method instead.
+* `notBefore`. Use the `nbf` method instead.
+* `issuedAt`. Use the `iat` method instead.
+
+You should also expect both `exp` and `nbf` claims not set in tokens as they are optional. Previously, these claims were
+being set with a value of `0` what does not make mush sense because their value should be a valid `NumericDate`.
+
+= Method `getExp` added to `SingleUseObjectKeyModel`
+
+As a consequence of the removal of deprecated methods from `AccessToken`, `IDToken`, and `JsonWebToken`,
+the `SingleUseObjectKeyModel` also changed to keep consistency with the method names related to expiration values.
+
+The previous `getExpiration` method is now deprecated and you should prefer using new newly introduced `getExp` method
+to avoid overflow after 2038.

@@ -8,7 +8,6 @@ import {
   ButtonVariant,
   FormGroup,
   PageSection,
-  TextInput,
 } from "@patternfly/react-core";
 import {
   DropdownItem,
@@ -20,7 +19,7 @@ import { useState } from "react";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { HelpItem, TextControl } from "ui-shared";
+import { HelpItem, TextControl } from "@keycloak/keycloak-ui-shared";
 
 import { adminClient } from "../../../admin-client";
 import { useAlerts } from "../../../components/alert/Alerts";
@@ -222,14 +221,14 @@ export default function LdapMapperDetails() {
               isDisabled={!isNew}
               rules={{ required: t("required") }}
             />
-            <TextInput
-              hidden
+            <input
+              type="hidden"
               defaultValue={isNew ? id : mapping ? mapping.parentId : ""}
               data-testid="ldap-mapper-parentId"
               {...form.register("parentId")}
             />
-            <TextInput
-              hidden
+            <input
+              type="hidden"
               defaultValue="org.keycloak.storage.ldap.mappers.LDAPStorageMapper"
               data-testid="ldap-mapper-provider-type"
               {...form.register("providerType")}
