@@ -79,36 +79,29 @@ public class OrganizationMemberResource {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response addMember(UserRepresentation rep) {
-        if (rep == null || !Objects.equals(rep.getUsername(), rep.getEmail())) {
-            throw ErrorResponse.error("To add a member to the organization it is expected the username and the email is the same.", Status.BAD_REQUEST);
+    public Response addMember(String id) {
+        auth.realm().requireManageRealm();
+        UserModel user = session.users().getUserById(realm, id);
+
+        if (user == null) {
+            throw ErrorResponse.error("User does not exist", Status.BAD_REQUEST);
         }
 
-        UsersResource usersResource = new UsersResource(session, auth, adminEvent);
-        Response response = usersResource.createUser(rep);
-
-        if (Status.CREATED.getStatusCode() == response.getStatus()) {
-            
-            UserModel member = session.users().getUserByUsername(realm, rep.getEmail());
-
-            String errorMessage;
-            try {
-                if (provider.addMember(organization, member)) {
-                    return response;
-                }
-                errorMessage = "Assigning the User as member of the organization was not succesful.";
-            } catch (ModelException me) {
-                errorMessage = me.getMessage();
+        try {
+            if (provider.addMember(organization, user)) {
+                return Response.created(session.getContext().getUri().getAbsolutePathBuilder().path(user.getId()).build()).build();
             }
-            throw ErrorResponse.error(errorMessage, Status.BAD_REQUEST);
+        } catch (ModelException me) {
+            throw ErrorResponse.error(me.getMessage(), Status.BAD_REQUEST);
         }
 
-        return response;
+        throw ErrorResponse.error("User is already a member of the organization.", Status.CONFLICT);
     }
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Stream<UserRepresentation> getMembers() {
+        auth.realm().requireManageRealm();
         return provider.getMembersStream(organization).map(this::toRepresentation);
     }
 
@@ -116,6 +109,7 @@ public class OrganizationMemberResource {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public UserRepresentation get(@PathParam("id") String id) {
+        auth.realm().requireManageRealm();
         if (StringUtil.isBlank(id)) {
             throw ErrorResponse.error("id cannot be null", Status.BAD_REQUEST);
         }
@@ -126,19 +120,25 @@ public class OrganizationMemberResource {
     @Path("{id}")
     @DELETE
     public Response delete(@PathParam("id") String id) {
+        auth.realm().requireManageRealm();
         if (StringUtil.isBlank(id)) {
             throw ErrorResponse.error("id cannot be null", Status.BAD_REQUEST);
         }
 
         UserModel member = getMember(id);
 
-        return new UserResource(session, member, auth, adminEvent).deleteUser();
+        if (provider.removeMember(organization, member)) {
+            return Response.noContent().build();
+        }
+
+        throw ErrorResponse.error("Not a member of the organization", Status.BAD_REQUEST);
     }
 
     @Path("{id}")
     @PUT
     @Consumes(MediaType.APPLICATION_JSON)
     public Response update(@PathParam("id") String id, UserRepresentation user) {
+        auth.realm().requireManageRealm();
         return new UserResource(session, getMember(id), auth, adminEvent).updateUser(user);
     }
 
@@ -146,12 +146,18 @@ public class OrganizationMemberResource {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public OrganizationRepresentation getOrganization(@PathParam("id") String id) {
+        auth.realm().requireManageRealm();
         if (StringUtil.isBlank(id)) {
             throw ErrorResponse.error("id cannot be null", Status.BAD_REQUEST);
         }
 
         UserModel member = getMember(id);
         OrganizationModel organization = provider.getByMember(member);
+
+        if (organization == null) {
+            throw ErrorResponse.error("Not associated with an organization", Status.NOT_FOUND);
+        }
+
         OrganizationRepresentation rep = new OrganizationRepresentation();
 
         rep.setId(organization.getId());

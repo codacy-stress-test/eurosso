@@ -142,19 +142,6 @@ and add packages manually.
         -Dtest=org.keycloak.testsuite.adapter.**.*Test
         -Papp-server-undertow
 
-### Jetty
-
-At the moment we can run the testsuite with Jetty `9.4`.
-Each version has its corresponding profile:
-
-* Jetty `9.4`: `app-server-jetty94`
-
-Here's how to run the tests with Jetty `9.4`:
-
-    mvn -f testsuite/integration-arquillian/pom.xml \
-        -Papp-server-jetty94 \
-        -Dtest=org.keycloak.testsuite.adapter.**.*Test
-
 ### Wildfly
 
     # Run tests
@@ -162,19 +149,6 @@ Here's how to run the tests with Jetty `9.4`:
        clean install \
        -Papp-server-wildfly \
        -Dtest=org.keycloak.testsuite.adapter.**
-
-### Tomcat
-
-We run testsuite with Tomcat 7, 8 and 9. For specific versions see properties `${tomcat[7,8,9].version}` in parent [pom.xml](../../pom.xml).
-
-To run tests on Tomcat:
-
-````
-mvn -f testsuite/integration-arquillian/pom.xml \
-       clean install \
-       -Papp-server-tomcat[7,8,9] \
-       -Dtest=org.keycloak.testsuite.adapter.**
-````
 
 ### JBoss Fuse 6.3
 
@@ -338,19 +312,6 @@ The test is executed in same way as the "auto" DB migration test with the only d
 that you need to use property `migration.mode` with the value `manual` .
 
     -Dmigration.mode=manual
-
-## Spring Boot adapter tests
-
-Currently, we are testing Spring Boot with three different containers `Tomcat 8`, `Undertow` and `Jetty 9.4`. 
-We are testing with Spring Boot 2.7. The version is specified in [root pom.xml](../../pom.xml) (i.e. see property `spring-boot27.version`).
-To run tests execute following command. Default version of Spring Boot is 2.7.x, there is also a profile `-Pspringboot27`.
-
-```
-mvn -f testsuite/integration-arquillian/tests/other/springboot-tests/pom.xml \
-    clean test \
-    -Dadapter.container=[tomcat|undertow|jetty94] \
-    [-Pspringboot27]
-```
 
 ## Disabling features
 Some features in Keycloak can be disabled. To run the testsuite with a specific feature disabled use the `auth.server.feature` system property. For example to run the tests with authorization disabled run:

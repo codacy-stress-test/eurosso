@@ -31,14 +31,15 @@ import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.BatchSize;
-import org.hibernate.annotations.Fetch;
-import org.hibernate.annotations.FetchMode;
 
 @Table(name="ORG")
 @Entity
 @NamedQueries({
-        @NamedQuery(name="getByRealm", query="select o from OrganizationEntity o where o.realmId = :realmId")
+        @NamedQuery(name="getByRealm", query="select o from OrganizationEntity o where o.realmId = :realmId order by o.name ASC"),
+        @NamedQuery(name="getByNameOrDomain", query="select distinct o from OrganizationEntity o inner join OrganizationDomainEntity d ON o.id = d.organization.id" +
+                " where o.realmId = :realmId AND (o.name = :search OR d.name = :search) order by o.name ASC"),
+        @NamedQuery(name="getByNameOrDomainContained", query="select distinct o from OrganizationEntity o inner join OrganizationDomainEntity d ON o.id = d.organization.id" +
+                " where o.realmId = :realmId AND (lower(o.name) like concat('%',:search,'%') OR d.name like concat('%',:search,'%')) order by o.name ASC")
 })
 public class OrganizationEntity {
 
@@ -56,12 +57,10 @@ public class OrganizationEntity {
     @Column(name = "GROUP_ID")
     private String groupId;
 
-    @Column(name = "IPD_ALIAS")
+    @Column(name = "IDP_ALIAS")
     private String idpAlias;
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy="organization")
-    @Fetch(FetchMode.SELECT)
-    @BatchSize(size = 20)
     protected Set<OrganizationDomainEntity> domains = new HashSet<>();
 
     public String getId() {

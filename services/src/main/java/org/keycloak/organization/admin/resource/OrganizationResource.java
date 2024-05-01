@@ -17,17 +17,17 @@
 
 package org.keycloak.organization.admin.resource;
 
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -37,6 +37,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.OrganizationDomainModel;
@@ -44,6 +45,7 @@ import org.keycloak.models.OrganizationModel;
 import org.keycloak.organization.OrganizationProvider;
 import org.keycloak.representations.idm.OrganizationDomainRepresentation;
 import org.keycloak.representations.idm.OrganizationRepresentation;
+import org.keycloak.services.ErrorResponse;
 import org.keycloak.services.resources.admin.AdminEventBuilder;
 import org.keycloak.services.resources.admin.permissions.AdminPermissionEvaluator;
 import org.keycloak.utils.StringUtil;
@@ -71,8 +73,9 @@ public class OrganizationResource {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     public Response create(OrganizationRepresentation organization) {
+        auth.realm().requireManageRealm();
         if (organization == null) {
-            throw new BadRequestException();
+            throw ErrorResponse.error("Organization cannot be null.", Response.Status.BAD_REQUEST);
         }
 
         Set<String> domains = organization.getDomains().stream().map(OrganizationDomainRepresentation::getName).collect(Collectors.toSet());
@@ -85,24 +88,24 @@ public class OrganizationResource {
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
+    @Operation( summary = "Return a paginated list of organizations filtered according to the specified parameters")
     public Stream<OrganizationRepresentation> search(
-            @Parameter(description = "A String representing an organization internet domain") @QueryParam("domain-name") String domainName
-    ) {
-        if (domainName == null || domainName.trim().isEmpty()) {
-            return provider.getAllStream().map(this::toRepresentation);
-        } else {
-            // search for the organization associated with the given domain
-            OrganizationModel org = provider.getByDomainName(domainName.trim());
-            return org == null ? Stream.empty() : Stream.of(toRepresentation(org));
-        }
+            @Parameter(description = "A String representing either an organization name or domain") @QueryParam("search") String search,
+            @Parameter(description = "Boolean which defines whether the params \"search\" must match exactly or not") @QueryParam("exact") Boolean exact,
+            @Parameter(description = "The position of the first result to be returned (pagination offset)") @QueryParam("first") @DefaultValue("0") Integer first,
+            @Parameter(description = "The maximum number of results that are to be returned. Defaults to 10") @QueryParam("max") @DefaultValue("10") Integer max
+            ) {
+        auth.realm().requireManageRealm();
+        return provider.getAllStream(search, exact, first, max).map(this::toRepresentation);
     }
 
     @Path("{id}")
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public OrganizationRepresentation get(@PathParam("id") String id) {
+        auth.realm().requireManageRealm();
         if (StringUtil.isBlank(id)) {
-            throw new BadRequestException();
+            throw ErrorResponse.error("Id cannot be null.", Response.Status.BAD_REQUEST);
         }
 
         return toRepresentation(getOrganization(id));
@@ -111,8 +114,9 @@ public class OrganizationResource {
     @Path("{id}")
     @DELETE
     public Response delete(@PathParam("id") String id) {
+        auth.realm().requireManageRealm();
         if (StringUtil.isBlank(id)) {
-            throw new BadRequestException();
+            throw ErrorResponse.error("Id cannot be null.", Response.Status.BAD_REQUEST);
         }
 
         provider.remove(getOrganization(id));
@@ -124,6 +128,7 @@ public class OrganizationResource {
     @PUT
     @Consumes(MediaType.APPLICATION_JSON)
     public Response update(@PathParam("id") String id, OrganizationRepresentation organization) {
+        auth.realm().requireManageRealm();
         OrganizationModel model = getOrganization(id);
         toModel(organization, model);
 
@@ -143,14 +148,17 @@ public class OrganizationResource {
     }
     
     private OrganizationModel getOrganization(String id) {
+        //checking permissions before trying to find organization to be able to return 403 (instead of 400 or 404)
+        auth.realm().requireManageRealm();
+
         if (id == null) {
-            throw new BadRequestException();
+            throw ErrorResponse.error("Id cannot be null.", Response.Status.BAD_REQUEST);
         }
 
         OrganizationModel model = provider.getById(id);
 
         if (model == null) {
-            throw new NotFoundException();
+            throw ErrorResponse.error("Organization not found.", Response.Status.NOT_FOUND);
         }
 
         return model;

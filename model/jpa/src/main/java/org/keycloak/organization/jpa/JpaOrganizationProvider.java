@@ -17,9 +17,11 @@
 
 package org.keycloak.organization.jpa;
 
-import static org.keycloak.models.OrganizationModel.USER_ORGANIZATION_ATTRIBUTE;
+import static org.keycloak.models.OrganizationModel.ORGANIZATION_ATTRIBUTE;
+import static org.keycloak.models.jpa.PaginationUtils.paginateQuery;
 import static org.keycloak.utils.StreamsUtil.closing;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -28,6 +30,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.TypedQuery;
 import org.keycloak.connections.jpa.JpaConnectionProvider;
+import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.GroupModel;
 import org.keycloak.models.GroupProvider;
 import org.keycloak.models.IdentityProviderModel;
@@ -93,7 +96,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         GroupModel group = getOrganizationGroup(organization);
 
         //TODO: won't scale, requires a better mechanism for bulk deleting users
-        userProvider.getGroupMembersStream(realm, group).forEach(userModel -> userProvider.removeUser(realm, userModel));
+        userProvider.getGroupMembersStream(realm, group).forEach(userModel -> removeMember(organization, userModel));
         groupProvider.removeGroup(realm, group);
 
         realm.removeIdentityProviderByAlias(entity.getIdpAlias());
@@ -121,12 +124,12 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             return false;
         }
 
-        if (user.getFirstAttribute(USER_ORGANIZATION_ATTRIBUTE) != null) {
+        if (user.getFirstAttribute(ORGANIZATION_ATTRIBUTE) != null) {
             throw new ModelException("User [" + user.getId() + "] is a member of a different organization");
         }
 
         user.joinGroup(group);
-        user.setSingleAttribute(USER_ORGANIZATION_ATTRIBUTE, entity.getId());
+        user.setSingleAttribute(ORGANIZATION_ATTRIBUTE, entity.getId());
 
         return true;
     }
@@ -150,12 +153,21 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     }
 
     @Override
-    public Stream<OrganizationModel> getAllStream() {
-        TypedQuery<OrganizationEntity> query = em.createNamedQuery("getByRealm", OrganizationEntity.class);
-
+    public Stream<OrganizationModel> getAllStream(String search, Boolean exact, Integer first, Integer max) {
+        TypedQuery<OrganizationEntity> query;
+        if (StringUtil.isBlank(search)) {
+            query = em.createNamedQuery("getByRealm", OrganizationEntity.class);
+        } else if (Boolean.TRUE.equals(exact)) {
+            query = em.createNamedQuery("getByNameOrDomain", OrganizationEntity.class);
+            query.setParameter("search", search);
+        } else {
+            query = em.createNamedQuery("getByNameOrDomainContained", OrganizationEntity.class);
+            query.setParameter("search", search.toLowerCase());
+        }
         query.setParameter("realmId", realm.getId());
 
-        return closing(query.getResultStream().map(entity -> new OrganizationAdapter(realm, entity, this)));
+        return closing(paginateQuery(query, first, max).getResultStream()
+                .map(entity -> new OrganizationAdapter(realm, entity, this)));
     }
 
     @Override
@@ -175,7 +187,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             return null;
         }
 
-        String orgId = user.getFirstAttribute(USER_ORGANIZATION_ATTRIBUTE);
+        String orgId = user.getFirstAttribute(ORGANIZATION_ATTRIBUTE);
 
         if (organization.getId().equals(orgId)) {
             return user;
@@ -188,7 +200,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     public OrganizationModel getByMember(UserModel member) {
         throwExceptionIfObjectIsNull(member, "User");
 
-        String orgId = member.getFirstAttribute(USER_ORGANIZATION_ATTRIBUTE);
+        String orgId = member.getFirstAttribute(ORGANIZATION_ATTRIBUTE);
 
         if (orgId == null) {
             return null;
@@ -204,6 +216,9 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
         OrganizationEntity organizationEntity = getEntity(organization.getId());
         organizationEntity.setIdpAlias(identityProvider.getAlias());
+        identityProvider.getConfig().put(ORGANIZATION_ATTRIBUTE, organization.getId());
+        realm.updateIdentityProvider(identityProvider);
+
         return true;
     }
 
@@ -223,6 +238,48 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
         OrganizationEntity organizationEntity = getEntity(organization.getId());
         organizationEntity.setIdpAlias(null);
+        return true;
+    }
+
+    @Override
+    public boolean isManagedMember(OrganizationModel organization, UserModel member) {
+        throwExceptionIfObjectIsNull(organization, "organization");
+
+        if (member == null) {
+            return false;
+        }
+
+        IdentityProviderModel identityProvider = organization.getIdentityProvider();
+
+        if (identityProvider == null) {
+            return false;
+        }
+
+        FederatedIdentityModel federatedIdentity = userProvider.getFederatedIdentity(realm, member, identityProvider.getAlias());
+
+        return federatedIdentity != null;
+    }
+
+    @Override
+    public boolean removeMember(OrganizationModel organization, UserModel member) {
+        throwExceptionIfObjectIsNull(organization, "organization");
+        throwExceptionIfObjectIsNull(member, "member");
+
+        OrganizationModel userOrg = getByMember(member);
+
+        if (userOrg == null || !userOrg.equals(organization)) {
+            return false;
+        }
+
+        if (isManagedMember(organization, member)) {
+            userProvider.removeUser(realm, member);
+        } else {
+            List<String> organizations = member.getAttributes().get(ORGANIZATION_ATTRIBUTE);
+            organizations.remove(organization.getId());
+            member.setAttribute(ORGANIZATION_ATTRIBUTE, organizations);
+            member.leaveGroup(getOrganizationGroup(organization));
+        }
+
         return true;
     }
 
