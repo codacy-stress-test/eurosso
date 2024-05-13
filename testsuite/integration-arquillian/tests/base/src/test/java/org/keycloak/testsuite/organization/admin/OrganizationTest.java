@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -32,6 +33,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -55,6 +57,8 @@ public class OrganizationTest extends AbstractOrganizationTest {
 
         assertEquals(organizationName, expected.getName());
         expected.setName("acme");
+        expected.setEnabled(false);
+        expected.setDescription("ACME Corporation Organization");
 
         OrganizationResource organization = testRealm().organizations().get(expected.getId());
 
@@ -66,6 +70,9 @@ public class OrganizationTest extends AbstractOrganizationTest {
         assertEquals(expected.getId(), existing.getId());
         assertEquals(expected.getName(), existing.getName());
         assertEquals(1, existing.getDomains().size());
+        assertThat(existing.isEnabled(), is(false));
+        assertThat(existing.getDescription(), notNullValue());
+        assertThat(expected.getDescription(), is(equalTo(existing.getDescription())));
     }
 
     @Test
@@ -75,6 +82,7 @@ public class OrganizationTest extends AbstractOrganizationTest {
         assertNotNull(existing);
         assertEquals(expected.getId(), existing.getId());
         assertEquals(expected.getName(), existing.getName());
+        assertThat(expected.isEnabled(), is(true));
     }
 
     @Test
@@ -103,6 +111,7 @@ public class OrganizationTest extends AbstractOrganizationTest {
         assertThat(existing, hasSize(1));
         OrganizationRepresentation orgRep = existing.get(0);
         assertThat(orgRep.getName(), is(equalTo("wayne-industries")));
+        assertThat(orgRep.isEnabled(), is(true));
         assertThat(orgRep.getDomains(), hasSize(2));
         assertThat(orgRep.getDomain("wayneind.com"), not(nullValue()));
         assertThat(orgRep.getDomain("wayneind-gotham.com"), not(nullValue()));
@@ -111,6 +120,7 @@ public class OrganizationTest extends AbstractOrganizationTest {
         assertThat(existing, hasSize(1));
         orgRep = existing.get(0);
         assertThat(orgRep.getName(), is(equalTo("Gotham-Bank")));
+        assertThat(orgRep.isEnabled(), is(true));
         assertThat(orgRep.getDomains(), hasSize(2));
         assertThat(orgRep.getDomain("gtbank.com"), not(nullValue()));
         assertThat(orgRep.getDomain("gtbank.net"), not(nullValue()));
@@ -156,6 +166,72 @@ public class OrganizationTest extends AbstractOrganizationTest {
         assertThat(existing, hasSize(4));
         orgNames = existing.stream().map(OrganizationRepresentation::getName).collect(Collectors.toList());
         assertThat(orgNames, containsInAnyOrder("ztest-6", "ztest-7", "ztest-8", "ztest-9"));
+    }
+
+    @Test
+    public void testSearchByAttributes() {
+        List<OrganizationRepresentation> expected = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            expected.add(createOrganization("testorg." + i));
+        }
+
+        // set attributes to the orgs.
+        OrganizationRepresentation orgRep = expected.get(0);
+        orgRep.singleAttribute("attr1", "value1");
+        try (Response response = testRealm().organizations().get(orgRep.getId()).update(orgRep)) {
+            assertThat(response.getStatus(), is(equalTo(Status.NO_CONTENT.getStatusCode())));
+        }
+
+        orgRep = expected.get(1);
+        orgRep.singleAttribute("attr1", "value1").singleAttribute("attr2", "value2");
+        try (Response response = testRealm().organizations().get(orgRep.getId()).update(orgRep)) {
+            assertThat(response.getStatus(), is(equalTo(Status.NO_CONTENT.getStatusCode())));
+        }
+
+        orgRep = expected.get(2);
+        orgRep.singleAttribute("attr1", "value1").singleAttribute("attr3", "value3");
+        try (Response response = testRealm().organizations().get(orgRep.getId()).update(orgRep)) {
+            assertThat(response.getStatus(), is(equalTo(Status.NO_CONTENT.getStatusCode())));
+        }
+
+        orgRep = expected.get(3);
+        orgRep.singleAttribute("attr2", "value2");
+        try (Response response = testRealm().organizations().get(orgRep.getId()).update(orgRep)) {
+            assertThat(response.getStatus(), is(equalTo(Status.NO_CONTENT.getStatusCode())));
+        }
+
+        // search for "attr1:value1" - should match testorg.0, testorg.1, and testorg.2
+        List<OrganizationRepresentation> fetchedOrgs = testRealm().organizations().searchByAttribute("attr1:value1");
+        fetchedOrgs.sort(Comparator.comparing(OrganizationRepresentation::getName));
+        assertThat(fetchedOrgs, hasSize(3));
+        assertThat(fetchedOrgs.get(0).getName(), is(equalTo(expected.get(0).getName())));
+        assertThat(fetchedOrgs.get(1).getName(), is(equalTo(expected.get(1).getName())));
+        assertThat(fetchedOrgs.get(2).getName(), is(equalTo(expected.get(2).getName())));
+
+        // search for "attr2:value2" - should match testorg.1 and testorg.3
+        fetchedOrgs = testRealm().organizations().searchByAttribute("attr2:value2");
+        fetchedOrgs.sort(Comparator.comparing(OrganizationRepresentation::getName));
+        assertThat(fetchedOrgs, hasSize(2));
+        assertThat(fetchedOrgs.get(0).getName(), is(equalTo(expected.get(1).getName())));
+        assertThat(fetchedOrgs.get(1).getName(), is(equalTo(expected.get(3).getName())));
+
+        // search for "attr3:value3" - should match only testorg.2
+        fetchedOrgs = testRealm().organizations().searchByAttribute("attr3:value3");
+        assertThat(fetchedOrgs, hasSize(1));
+        assertThat(fetchedOrgs.get(0).getName(), is(equalTo(expected.get(2).getName())));
+
+        // search for both "attr1:value1 attr2:value2" - should match only testorg.1
+        fetchedOrgs = testRealm().organizations().searchByAttribute("attr1:value1 attr2:value2");
+        assertThat(fetchedOrgs, hasSize(1));
+        assertThat(fetchedOrgs.get(0).getName(), is(equalTo(expected.get(1).getName())));
+
+        // search for both "attr2:value2 attr3:value3" - not org has both of these attributes at the same time.
+        fetchedOrgs = testRealm().organizations().searchByAttribute("attr2:value2 attr3:value3");
+        assertThat(fetchedOrgs, hasSize(0));
+
+        // search for "anything:anyvalue" - should again match no org because no org has this attribute.
+        fetchedOrgs = testRealm().organizations().searchByAttribute("anything:anyvalue");
+        assertThat(fetchedOrgs, hasSize(0));
     }
 
     @Test
@@ -211,6 +287,7 @@ public class OrganizationTest extends AbstractOrganizationTest {
 
         updated = organization.toRepresentation();
         assertEquals(0, updated.getAttributes().size());
+
     }
 
     @Test

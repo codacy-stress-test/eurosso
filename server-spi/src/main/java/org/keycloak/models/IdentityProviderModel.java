@@ -220,6 +220,14 @@ public class IdentityProviderModel implements Serializable {
         return displayIconClasses;
     }
 
+    public String getOrganizationId() {
+        return getConfig().get(OrganizationModel.ORGANIZATION_ATTRIBUTE);
+    }
+
+    public void setOrganizationId(String organizationId) {
+        getConfig().put(OrganizationModel.ORGANIZATION_ATTRIBUTE, organizationId);
+    }
+
     /**
      * <p>Validates this configuration.
      * 
@@ -264,7 +272,7 @@ public class IdentityProviderModel implements Serializable {
     }
 
     /**
-     * Returns flag whether the users withing this IdP should be transient, ie. not stored in Keycloak database.
+     * Returns flag whether the users within this IdP should be transient, ie. not stored in Keycloak database.
      * Default value: {@code false}.
      * @return
      */

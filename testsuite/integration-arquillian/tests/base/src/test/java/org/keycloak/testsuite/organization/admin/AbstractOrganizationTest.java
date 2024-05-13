@@ -18,7 +18,9 @@
 package org.keycloak.testsuite.organization.admin;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.keycloak.testsuite.broker.BrokerTestTools.waitForPage;
 
 import java.util.List;
 import java.util.function.Function;
@@ -27,19 +29,26 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
 import org.jboss.arquillian.graphene.page.Page;
 import org.keycloak.admin.client.resource.OrganizationResource;
+import org.keycloak.models.OrganizationModel;
+import org.keycloak.representations.idm.ClientRepresentation;
+import org.keycloak.admin.client.resource.UsersResource;
+import org.keycloak.representations.idm.IdentityProviderRepresentation;
+import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.representations.idm.GroupRepresentation;
 import org.keycloak.representations.idm.OrganizationDomainRepresentation;
 import org.keycloak.representations.idm.OrganizationRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
+import org.keycloak.testsuite.Assert;
 import org.keycloak.testsuite.admin.AbstractAdminTest;
 import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.admin.Users;
+import org.keycloak.testsuite.broker.BrokerConfiguration;
 import org.keycloak.testsuite.broker.KcOidcBrokerConfiguration;
 import org.keycloak.testsuite.pages.AppPage;
 import org.keycloak.testsuite.pages.IdpConfirmLinkPage;
 import org.keycloak.testsuite.pages.LoginPage;
 import org.keycloak.testsuite.pages.UpdateAccountInformationPage;
-import org.keycloak.testsuite.util.UserBuilder;
 
 /**
  * @author <a href="mailto:psilva@redhat.com">Pedro Igor</a>
@@ -49,38 +58,8 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
     protected String organizationName = "neworg";
     protected String memberEmail = "jdoe@neworg.org";
     protected String memberPassword = "password";
-    protected Function<String, KcOidcBrokerConfiguration> brokerConfigFunction = name ->  new KcOidcBrokerConfiguration() {
-        @Override
-        public String consumerRealmName() {
-            return TEST_REALM_NAME;
-        }
+    protected Function<String, BrokerConfiguration> brokerConfigFunction = name -> new BrokerConfigurationWrapper(name, createBrokerConfiguration());
 
-        @Override
-        public RealmRepresentation createProviderRealm() {
-            RealmRepresentation providerRealm = super.createProviderRealm();
-
-            providerRealm.setClients(createProviderClients());
-            providerRealm.setUsers(List.of(
-                    UserBuilder.create()
-                    .username(getUserLogin())
-                    .email(getUserEmail())
-                    .password(getUserPassword())
-                    .enabled(true).build())
-            );
-
-            return providerRealm;
-        }
-
-        @Override
-        public String getUserEmail() {
-            return getUserLogin() + "@" + organizationName + ".org";
-        }
-
-        @Override
-        public String getIDPAlias() {
-            return name + "-identity-provider";
-        }
-    };
 
     @Page
     protected LoginPage loginPage;
@@ -94,7 +73,7 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
     @Page
     protected AppPage appPage;
 
-    protected KcOidcBrokerConfiguration bc = brokerConfigFunction.apply(organizationName);
+    protected BrokerConfiguration bc = brokerConfigFunction.apply(organizationName);
 
     @Override
     public void configureTestRealm(RealmRepresentation testRealm) {
@@ -125,8 +104,11 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
             assertEquals(Status.CREATED.getStatusCode(), response.getStatus());
             id = ApiUtil.getCreatedId(response);
         }
-
-        testRealm().organizations().get(id).identityProvider().create(brokerConfigFunction.apply(name).setUpIdentityProvider()).close();
+        IdentityProviderRepresentation broker = brokerConfigFunction.apply(name).setUpIdentityProvider();
+        broker.getConfig().put(OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE, org.getDomains().iterator().next().getName());
+        testRealm().identityProviders().create(broker).close();
+        getCleanup().addCleanup(testRealm().identityProviders().get(broker.getAlias())::remove);
+        testRealm().organizations().get(id).identityProviders().addIdentityProvider(broker.getAlias()).close();
         org = testRealm().organizations().get(id).toRepresentation();
         getCleanup().addCleanup(() -> testRealm().organizations().get(id).delete().close());
 
@@ -151,11 +133,17 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
     }
 
     protected UserRepresentation addMember(OrganizationResource organization, String email) {
+        return addMember(organization, email, null, null);
+    }
+
+    protected UserRepresentation addMember(OrganizationResource organization, String email, String firstName, String lastName) {
         UserRepresentation expected = new UserRepresentation();
 
         expected.setEmail(email);
         expected.setUsername(expected.getEmail());
         expected.setEnabled(true);
+        expected.setFirstName(firstName);
+        expected.setLastName(lastName);
         Users.setPasswordFor(expected, memberPassword);
 
         try (Response response = testRealm().users().create(expected)) {
@@ -178,4 +166,60 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
             return actual;
         }
     }
+
+    protected void assertBrokerRegistration(OrganizationResource organization, String email) {
+        // login with email only
+        oauth.clientId("broker-app");
+        loginPage.open(bc.consumerRealmName());
+        log.debug("Logging in");
+        Assert.assertFalse(loginPage.isPasswordInputPresent());
+        Assert.assertFalse(loginPage.isSocialButtonPresent(bc.getIDPAlias()));
+        loginPage.loginUsername(email);
+
+        // user automatically redirected to the organization identity provider
+        waitForPage(driver, "sign in to", true);
+        Assert.assertTrue("Driver should be on the provider realm page right now",
+                driver.getCurrentUrl().contains("/auth/realms/" + bc.providerRealmName() + "/"));
+        // login to the organization identity provider and run the configured first broker login flow
+        loginPage.login(email, bc.getUserPassword());
+        waitForPage(driver, "update account information", false);
+        updateAccountInformationPage.assertCurrent();
+        Assert.assertTrue("We must be on correct realm right now",
+                driver.getCurrentUrl().contains("/auth/realms/" + bc.consumerRealmName() + "/"));
+        log.debug("Updating info on updateAccount page");
+        assertFalse(driver.getPageSource().contains("kc.org"));
+        updateAccountInformationPage.updateAccountInformation(bc.getUserLogin(), email, "Firstname", "Lastname");
+
+        assertIsMember(email, organization);
+    }
+
+    protected void assertIsMember(String userEmail, OrganizationResource organization) {
+        UserRepresentation account = getUserRepresentation(userEmail);
+        UserRepresentation member = organization.members().member(account.getId()).toRepresentation();
+        Assert.assertEquals(account.getId(), member.getId());
+    }
+
+    protected UserRepresentation getUserRepresentation(String userEmail) {
+        UsersResource users = adminClient.realm(bc.consumerRealmName()).users();
+        List<UserRepresentation> reps = users.searchByEmail(userEmail, true);
+        Assert.assertFalse(reps.isEmpty());
+        Assert.assertEquals(1, reps.size());
+        return reps.get(0);
+    }
+
+    protected GroupRepresentation createGroup(RealmResource realm, String name) {
+        GroupRepresentation group = new GroupRepresentation();
+        group.setName(name);
+        try (Response response = realm.groups().add(group)) {
+            String groupId = ApiUtil.getCreatedId(response);
+
+            // Set ID to the original rep
+            group.setId(groupId);
+            return group;
+        }
+    }
+
+    protected BrokerConfiguration createBrokerConfiguration() {
+        return new KcOidcBrokerConfiguration();
+    };
 }

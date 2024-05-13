@@ -138,10 +138,6 @@ import static org.keycloak.testsuite.util.WaitUtils.waitForPageToLoad;
  * @author tkyjovsk
  */
 @AppServerContainer(ContainerConstants.APP_SERVER_UNDERTOW)
-@AppServerContainer(ContainerConstants.APP_SERVER_WILDFLY)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP6)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP71)
 public class DemoServletsAdapterTest extends AbstractServletsAdapterTest {
 
     @Page
@@ -1109,7 +1105,7 @@ public class DemoServletsAdapterTest extends AbstractServletsAdapterTest {
         String serverLogPath = null;
 
         String appServer = System.getProperty("app.server");
-        if (appServer != null && (appServer.equals("wildfly") || appServer.equals("eap6") || appServer.equals("eap"))) {
+        if (appServer != null && (appServer.equals("wildfly") || appServer.equals("eap"))) {
             serverLogPath = System.getProperty("app.server.home") + "/standalone-test/log/server.log";
         }
 

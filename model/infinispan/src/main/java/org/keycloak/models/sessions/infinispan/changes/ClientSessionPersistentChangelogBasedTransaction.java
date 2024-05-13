@@ -19,7 +19,6 @@ package org.keycloak.models.sessions.infinispan.changes;
 
 import org.infinispan.Cache;
 import org.jboss.logging.Logger;
-import org.keycloak.common.Profile;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -53,8 +52,10 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
                                                             SessionFunction<AuthenticatedClientSessionEntity> offlineLifespanMsLoader,
                                                             SessionFunction<AuthenticatedClientSessionEntity> offlineMaxIdleTimeMsLoader,
                                                             UserSessionPersistentChangelogBasedTransaction userSessionTx,
-                                                            ArrayBlockingQueue<PersistentUpdate> batchingQueue) {
-        super(session, cache, offlineCache, remoteCacheInvoker, lifespanMsLoader, maxIdleTimeMsLoader, offlineLifespanMsLoader, offlineMaxIdleTimeMsLoader, batchingQueue);
+                                                            ArrayBlockingQueue<PersistentUpdate> batchingQueue,
+                                                            SerializeExecutionsByKey<UUID> serializerOnline,
+                                                            SerializeExecutionsByKey<UUID> serializerOffline) {
+        super(session, cache, offlineCache, remoteCacheInvoker, lifespanMsLoader, maxIdleTimeMsLoader, offlineLifespanMsLoader, offlineMaxIdleTimeMsLoader, batchingQueue, serializerOnline, serializerOffline);
         this.userSessionTx = userSessionTx;
     }
 
@@ -62,9 +63,8 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
         SessionUpdatesList<AuthenticatedClientSessionEntity> myUpdates = getUpdates(offline).get(key);
         if (myUpdates == null) {
             SessionEntityWrapper<AuthenticatedClientSessionEntity> wrappedEntity = null;
-            if (!Profile.isFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS_NO_CACHE)) {
-                wrappedEntity = getCache(offline).get(key);
-            }
+            wrappedEntity = getCache(offline).get(key);
+
             if (wrappedEntity == null) {
                 LOG.debugf("client-session not found in cache for sessionId=%s, offline=%s, loading from persister", key, offline);
                 wrappedEntity = getSessionEntityFromPersister(realm, client, userSession, offline);
@@ -91,12 +91,11 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
 
             return wrappedEntity;
         } else {
-            AuthenticatedClientSessionEntity entity = myUpdates.getEntityWrapper().getEntity();
 
             // If entity is scheduled for remove, we don't return it.
             boolean scheduledForRemove = myUpdates.getUpdateTasks().stream().filter((SessionUpdateTask task) -> {
 
-                return task.getOperation(entity) == SessionUpdateTask.CacheOperation.REMOVE;
+                return task.getOperation() == SessionUpdateTask.CacheOperation.REMOVE;
 
             }).findFirst().isPresent();
 
@@ -193,7 +192,7 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
         }
 
         @Override
-        public CacheOperation getOperation(UserSessionEntity session) {
+        public CacheOperation getOperation() {
             return CacheOperation.REPLACE;
         }
 

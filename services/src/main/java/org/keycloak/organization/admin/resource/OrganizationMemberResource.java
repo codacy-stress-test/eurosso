@@ -17,10 +17,13 @@
 
 package org.keycloak.organization.admin.resource;
 
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.POST;
@@ -28,24 +31,40 @@ import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
 import jakarta.ws.rs.ext.Provider;
-import java.util.Objects;
+
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
+import org.keycloak.OAuth2Constants;
+import org.keycloak.common.util.Time;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelException;
 import org.keycloak.models.OrganizationModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+
+import org.keycloak.authentication.actiontoken.inviteorg.InviteOrgActionToken;
+import org.keycloak.email.EmailException;
+import org.keycloak.email.EmailTemplateProvider;
+import org.keycloak.events.admin.OperationType;
+import org.keycloak.models.*;
 import org.keycloak.models.utils.ModelToRepresentation;
 import org.keycloak.organization.OrganizationProvider;
+import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.protocol.oidc.OIDCLoginProtocolService;
+import org.keycloak.protocol.oidc.utils.OIDCResponseType;
 import org.keycloak.representations.idm.OrganizationRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.services.ErrorResponse;
+import org.keycloak.services.ServicesLogger;
+import org.keycloak.services.Urls;
+import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.resources.admin.AdminEventBuilder;
 import org.keycloak.services.resources.admin.UserResource;
-import org.keycloak.services.resources.admin.UsersResource;
 import org.keycloak.services.resources.admin.permissions.AdminPermissionEvaluator;
 import org.keycloak.utils.StringUtil;
 
@@ -98,11 +117,29 @@ public class OrganizationMemberResource {
         throw ErrorResponse.error("User is already a member of the organization.", Status.CONFLICT);
     }
 
+    @Path("invite-user")
+    public Response inviteUser(String email) {
+        return new OrganizationInvitationResource(session, organization, adminEvent).inviteUser(email);
+    }
+
+    @POST
+    @Path("invite-existing-user")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response inviteExistingUser(String id) {
+        return new OrganizationInvitationResource(session, organization, adminEvent).inviteExistingUser(id);
+    }
+
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public Stream<UserRepresentation> getMembers() {
+    @Operation( summary = "Return a paginated list of organization members filtered according to the specified parameters")
+    public Stream<UserRepresentation> search(
+            @Parameter(description = "A String representing either a member's username, e-mail, first name, or last name.") @QueryParam("search") String search,
+            @Parameter(description = "Boolean which defines whether the param 'search' must match exactly or not") @QueryParam("exact") Boolean exact,
+            @Parameter(description = "The position of the first result to be processed (pagination offset)") @QueryParam("first") @DefaultValue("0") Integer first,
+            @Parameter(description = "The maximum number of results to be returned. Defaults to 10") @QueryParam("max") @DefaultValue("10") Integer max
+    ) {
         auth.realm().requireManageRealm();
-        return provider.getMembersStream(organization).map(this::toRepresentation);
+        return provider.getMembersStream(organization, search, exact, first, max).map(this::toRepresentation);
     }
 
     @Path("{id}")

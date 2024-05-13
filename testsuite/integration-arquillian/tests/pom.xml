@@ -1819,7 +1819,7 @@
                 </dependency>
                 <dependency>
                     <groupId>org.infinispan</groupId>
-                    <artifactId>infinispan-core-jakarta</artifactId>
+                    <artifactId>infinispan-core</artifactId>
                 </dependency>
 
                 <dependency>
@@ -1852,13 +1852,6 @@
                         </exclusion>
                     </exclusions>
                     <type>zip</type>
-                </dependency>
-
-                <!-- Fuse adapter dependency -->
-                <dependency>
-                    <groupId>org.osgi</groupId>
-                    <artifactId>org.osgi.enterprise</artifactId>
-                    <scope>provided</scope>
                 </dependency>
 
                 <!-- Needed for infinispan statistics -->

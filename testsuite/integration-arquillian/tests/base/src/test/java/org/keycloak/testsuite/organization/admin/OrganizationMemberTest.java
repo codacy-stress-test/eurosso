@@ -18,6 +18,12 @@
 package org.keycloak.testsuite.organization.admin;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -145,7 +151,7 @@ public class OrganizationMemberTest extends AbstractOrganizationTest {
             expected.add(addMember(organization, "member-" + i + "@neworg.org"));
         }
 
-        List<UserRepresentation> existing = organization.members().getAll();;
+        List<UserRepresentation> existing = organization.members().getAll();
         assertFalse(existing.isEmpty());
         assertEquals(expected.size(), existing.size());
         for (UserRepresentation expectedRep : expected) {
@@ -156,11 +162,71 @@ public class OrganizationMemberTest extends AbstractOrganizationTest {
             assertEquals(expectedRep.getEmail(), existingRep.getEmail());
             assertEquals(expectedRep.getFirstName(), existingRep.getFirstName());
             assertEquals(expectedRep.getLastName(), existingRep.getLastName());
+            assertTrue(expectedRep.isEnabled());
         }
     }
 
     @Test
-    public void testDelete() {
+    public void testGetAllDisabledOrganization() {
+        OrganizationRepresentation orgRep = createOrganization();
+        OrganizationResource organization = testRealm().organizations().get(orgRep.getId());
+
+        // add some unmanaged members to the organization.
+        for (int i = 0; i < 5; i++) {
+            addMember(organization, "member-" + i + "@neworg.org");
+        }
+
+        // onboard a test user by authenticating using the organization's provider.
+        super.assertBrokerRegistration(organization, bc.getUserEmail());
+
+        // disable the organization and check that fetching its representation has it disabled.
+        orgRep.setEnabled(false);
+        try (Response response = organization.update(orgRep)) {
+            assertEquals(Status.NO_CONTENT.getStatusCode(), response.getStatus());
+        }
+        OrganizationRepresentation existingOrg = organization.toRepresentation();
+        assertThat(orgRep.getId(), is(equalTo(existingOrg.getId())));
+        assertThat(orgRep.getName(), is(equalTo(existingOrg.getName())));
+        assertThat(existingOrg.isEnabled(), is(false));
+
+        // now fetch all users from the org - unmanaged users should still be enabled, but managed ones should not.
+        List<UserRepresentation> existing = organization.members().getAll();;
+        assertThat(existing, not(empty()));
+        assertThat(existing, hasSize(6));
+        for (UserRepresentation user : existing) {
+            if (user.getEmail().equals(bc.getUserEmail())) {
+                assertThat(user.isEnabled(), is(false));
+            } else {
+                assertThat(user.isEnabled(), is(true));
+            }
+        }
+
+        // fetching users from the users endpoint should have the same result.
+        UserRepresentation disabledUser = null;
+        existing = testRealm().users().search("*neworg*",0, 10);
+        assertThat(existing, not(empty()));
+        assertThat(existing, hasSize(6));
+        for (UserRepresentation user : existing) {
+            if (user.getEmail().equals(bc.getUserEmail())) {
+                assertThat(user.isEnabled(), is(false));
+                disabledUser = user;
+            } else {
+                assertThat(user.isEnabled(), is(true));
+            }
+        }
+
+        assertThat(disabledUser, notNullValue());
+        // try to update the disabled user (for example, try to re-enable the user) - should not be possible.
+        disabledUser.setEnabled(true);
+        try {
+            testRealm().users().get(disabledUser.getId()).update(disabledUser);
+            fail("Should not be possible to update disabled org user");
+        } catch(BadRequestException ignored) {
+        }
+    }
+
+    @Test
+    public void testDeleteUnmanagedMember() {
         UPConfig upConfig = testRealm().users().userProfile().getConfiguration();
         upConfig.setUnmanagedAttributePolicy(UnmanagedAttributePolicy.ENABLED);
         OrganizationResource organization = testRealm().organizations().get(createOrganization().getId());
@@ -182,6 +248,19 @@ public class OrganizationMemberTest extends AbstractOrganizationTest {
         } catch (NotFoundException ignore) {
 
         }
+    }
+
+    @Test
+    public void testUpdateEmailUnmanagedMember() {
+        OrganizationResource organization = testRealm().organizations().get(createOrganization().getId());
+        UserRepresentation expected = addMember(organization);
+        expected.setEmail("some@unknown.org");
+        UserResource userResource = testRealm().users().get(expected.getId());
+        userResource.update(expected);
+        UserRepresentation actual = userResource.toRepresentation();
+        assertEquals(expected.getId(), actual.getId());
+        assertEquals(expected.getEmail(), actual.getEmail());
+
     }
 
     @Test
@@ -222,10 +301,93 @@ public class OrganizationMemberTest extends AbstractOrganizationTest {
         OrganizationResource organization = testRealm().organizations().get(createOrganization().getId());
         addMember(organization);
 
-        assertTrue(testRealm().groups().groups().stream().anyMatch(group -> group.getName().startsWith("kc.org.")));
+        assertTrue(testRealm().groups().groups("", 0, 100, false).stream().anyMatch(group -> group.getAttributes().containsKey("kc.org")));
 
         organization.delete().close();
 
-        assertFalse(testRealm().groups().groups().stream().anyMatch(group -> group.getName().startsWith("kc.org.")));
+        assertFalse(testRealm().groups().groups("", 0, 100, false).stream().anyMatch(group -> group.getAttributes().containsKey("kc.org")));
     }
+
+    @Test
+    public void testSearchMembers() {
+
+        // create test users, ordered by username (e-mail).
+        OrganizationResource organization = testRealm().organizations().get(createOrganization().getId());
+        List<UserRepresentation> expected = new ArrayList<>();
+        expected.add(addMember(organization, "batwoman@neworg.org", "Katherine", "Kane"));
+        expected.add(addMember(organization, "brucewayne@neworg.org", "Bruce", "Wayne"));
+        expected.add(addMember(organization, "harveydent@neworg.org", "Harvey", "Dent"));
+        expected.add(addMember(organization, "marthaw@neworg.org", "Martha", "Wayne"));
+        expected.add(addMember(organization, "thejoker@neworg.org", "Jack", "White"));
+
+        // exact search - username/e-mail, first name, last name.
+        List<UserRepresentation> existing = organization.members().search("brucewayne@neworg.org", true, null, null);
+        assertThat(existing, hasSize(1));
+        assertThat(existing.get(0).getUsername(), is(equalTo("brucewayne@neworg.org")));
+        assertThat(existing.get(0).getEmail(), is(equalTo("brucewayne@neworg.org")));
+        assertThat(existing.get(0).getFirstName(), is(equalTo("Bruce")));
+        assertThat(existing.get(0).getLastName(), is(equalTo("Wayne")));
+
+        existing = organization.members().search("Harvey", true, null, null);
+        assertThat(existing, hasSize(1));
+        assertThat(existing.get(0).getUsername(), is(equalTo("harveydent@neworg.org")));
+        assertThat(existing.get(0).getEmail(), is(equalTo("harveydent@neworg.org")));
+        assertThat(existing.get(0).getFirstName(), is(equalTo("Harvey")));
+        assertThat(existing.get(0).getLastName(), is(equalTo("Dent")));
+
+        existing = organization.members().search("Wayne", true, null, null);
+        assertThat(existing, hasSize(2));
+        assertThat(existing.get(0).getUsername(), is(equalTo("brucewayne@neworg.org")));
+        assertThat(existing.get(1).getUsername(), is(equalTo("marthaw@neworg.org")));
+
+        existing = organization.members().search("Gordon", true, null, null);
+        assertThat(existing, is(empty()));
+
+        // partial search - partial e-mail should match all users.
+        existing = organization.members().search("neworg", false, null, null);
+        assertThat(existing, hasSize(5));
+        for (int i = 0; i < 5; i++) { // returned entries should also be ordered.
+            assertThat(expected.get(i).getId(), is(equalTo(expected.get(i).getId())));
+            assertThat(expected.get(i).getUsername(), is(equalTo(expected.get(i).getUsername())));
+            assertThat(expected.get(i).getEmail(), is(equalTo(expected.get(i).getEmail())));
+            assertThat(expected.get(i).getFirstName(), is(equalTo(expected.get(i).getFirstName())));
+            assertThat(expected.get(i).getLastName(), is(equalTo(expected.get(i).getLastName())));
+        }
+
+        // partial search using 'th' search string - should match 'Katherine' by name, 'Jack' by username/e-mail
+        // and 'Martha' either by username or first name.
+        existing = organization.members().search("th", false, null, null);
+        assertThat(existing, hasSize(3));
+        assertThat(existing.get(0).getUsername(), is(equalTo("batwoman@neworg.org")));
+        assertThat(existing.get(0).getFirstName(), is(equalTo("Katherine")));
+        assertThat(existing.get(1).getUsername(), is(equalTo("marthaw@neworg.org")));
+        assertThat(existing.get(1).getFirstName(), is(equalTo("Martha")));
+        assertThat(existing.get(2).getUsername(), is(equalTo("thejoker@neworg.org")));
+        assertThat(existing.get(2).getFirstName(), is(equalTo("Jack")));
+
+        // partial search using 'way' - should match both 'Bruce' (either by username or last name) and 'Martha' by last name.
+        existing = organization.members().search("way", false, null, null);
+        assertThat(existing, hasSize(2));
+        assertThat(existing.get(0).getUsername(), is(equalTo("brucewayne@neworg.org")));
+        assertThat(existing.get(0).getFirstName(), is(equalTo("Bruce")));
+        assertThat(existing.get(1).getUsername(), is(equalTo("marthaw@neworg.org")));
+        assertThat(existing.get(1).getFirstName(), is(equalTo("Martha")));
+
+        // partial search using with no match - e.g. 'nonexistent'.
+        existing = organization.members().search("nonexistent", false, null, null);
+        assertThat(existing, is(empty()));
+
+        // paginated search - try to fetch 3 users per page.
+        existing = organization.members().search("", false, 0, 3);
+        assertThat(existing, hasSize(3));
+        assertThat(existing.get(0).getUsername(), is(equalTo("batwoman@neworg.org")));
+        assertThat(existing.get(1).getUsername(), is(equalTo("brucewayne@neworg.org")));
+        assertThat(existing.get(2).getUsername(), is(equalTo("harveydent@neworg.org")));
+
+        existing = organization.members().search("", false, 3, 3);
+        assertThat(existing, hasSize(2));
+        assertThat(existing.get(0).getUsername(), is(equalTo("marthaw@neworg.org")));
+        assertThat(existing.get(1).getUsername(), is(equalTo("thejoker@neworg.org")));
+    }
+
 }
