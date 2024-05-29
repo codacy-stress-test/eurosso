@@ -91,7 +91,7 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
 
     @Override
     public boolean isEnabled() {
-        return entity.isEnabled();
+        return provider.isEnabled() && entity.isEnabled();
     }
 
     @Override
@@ -136,8 +136,6 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
             throw new ModelValidationException("You must provide at least one domain");
         }
 
-        List<IdentityProviderModel> idps = this.getIdentityProviders().toList();
-
         Map<String, OrganizationDomainModel> modelMap = domains.stream()
                 .map(this::validateDomain)
                 .collect(Collectors.toMap(OrganizationDomainModel::getName, Function.identity()));
@@ -145,27 +143,27 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
         for (OrganizationDomainEntity domainEntity : new HashSet<>(this.entity.getDomains())) {
             // update the existing domain (for now, only the verified flag can be changed).
             if (modelMap.containsKey(domainEntity.getName())) {
-                domainEntity.setVerified(modelMap.get(domainEntity.getName()).getVerified());
+                domainEntity.setVerified(modelMap.get(domainEntity.getName()).isVerified());
                 modelMap.remove(domainEntity.getName());
-            }
-            // remove domain that is not found in the new set.
-            else {
+            } else {
+                // remove domain that is not found in the new set.
                 this.entity.removeDomain(domainEntity);
                 // check if any idp is assigned to the removed domain, and unset the domain if that's the case.
-                idps.forEach(idp -> {
-                    if (Objects.equals(domainEntity.getName(), idp.getConfig().get(ORGANIZATION_DOMAIN_ATTRIBUTE))) {
-                        idp.getConfig().remove(ORGANIZATION_DOMAIN_ATTRIBUTE);
-                        realm.updateIdentityProvider(idp);
-                    }
-                });
+                getIdentityProviders()
+                        .filter(idp -> Objects.equals(domainEntity.getName(), idp.getConfig().get(ORGANIZATION_DOMAIN_ATTRIBUTE)))
+                        .forEach(idp -> {
+                            idp.getConfig().remove(ORGANIZATION_DOMAIN_ATTRIBUTE);
+                            realm.updateIdentityProvider(idp);
+                        });
             }
         }
 
         // create the remaining domains.
         for (OrganizationDomainModel model : modelMap.values()) {
             OrganizationDomainEntity domainEntity = new OrganizationDomainEntity();
+            domainEntity.setId(KeycloakModelUtils.generateId());
             domainEntity.setName(model.getName());
-            domainEntity.setVerified(model.getVerified());
+            domainEntity.setVerified(model.isVerified());
             domainEntity.setOrganization(this.entity);
             this.entity.addDomain(domainEntity);
         }
@@ -236,7 +234,7 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
         }
         OrganizationModel orgModel = provider.getByDomainName(domainName);
         if (orgModel != null && !Objects.equals(getId(), orgModel.getId())) {
-            throw new ModelValidationException("Domain " + domainName + " is already linked to another organization");
+            throw new ModelValidationException("Domain " + domainName + " is already linked to another organization in realm " + realm.getName());
         }
         return domainModel;
     }

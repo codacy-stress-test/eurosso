@@ -17,6 +17,8 @@
 
 package org.keycloak.testsuite.organization.admin;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -24,7 +26,6 @@ import static org.keycloak.testsuite.broker.BrokerTestTools.waitForPage;
 
 import java.util.List;
 import java.util.function.Function;
-
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
 import org.jboss.arquillian.graphene.page.Page;
@@ -48,6 +49,7 @@ import org.keycloak.testsuite.pages.AppPage;
 import org.keycloak.testsuite.pages.IdpConfirmLinkPage;
 import org.keycloak.testsuite.pages.LoginPage;
 import org.keycloak.testsuite.pages.UpdateAccountInformationPage;
+import org.keycloak.testsuite.util.TestCleanup;
 
 /**
  * @author <a href="mailto:psilva@redhat.com">Pedro Igor</a>
@@ -78,6 +80,7 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
     public void configureTestRealm(RealmRepresentation testRealm) {
         testRealm.getClients().addAll(bc.createConsumerClients());
         testRealm.setSmtpServer(null);
+        testRealm.setOrganizationsEnabled(Boolean.TRUE);
         super.configureTestRealm(testRealm);
     }
 
@@ -95,26 +98,35 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
         return createOrganization(name, name + ".org");
     }
 
-    protected OrganizationRepresentation createOrganization(String name, String... orgDomain) {
-        OrganizationRepresentation org = createRepresentation(name, orgDomain);
+    protected OrganizationRepresentation createOrganization(String name, String... orgDomains) {
+        return createOrganization(testRealm(), name, orgDomains);
+    }
+
+    protected OrganizationRepresentation createOrganization(RealmResource realm, String name, String... orgDomains) {
+        return createOrganization(realm, getCleanup(), name, brokerConfigFunction.apply(name).setUpIdentityProvider(), orgDomains);
+    }
+
+    protected static OrganizationRepresentation createOrganization(RealmResource testRealm, TestCleanup testCleanup, String name,
+                                                                   IdentityProviderRepresentation broker, String... orgDomains) {
+        OrganizationRepresentation org = createRepresentation(name, orgDomains);
         String id;
 
-        try (Response response = testRealm().organizations().create(org)) {
+        try (Response response = testRealm.organizations().create(org)) {
             assertEquals(Status.CREATED.getStatusCode(), response.getStatus());
             id = ApiUtil.getCreatedId(response);
         }
-        IdentityProviderRepresentation broker = brokerConfigFunction.apply(name).setUpIdentityProvider();
-        broker.getConfig().put(OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE, org.getDomains().iterator().next().getName());
-        testRealm().identityProviders().create(broker).close();
-        getCleanup().addCleanup(testRealm().identityProviders().get(broker.getAlias())::remove);
-        testRealm().organizations().get(id).identityProviders().addIdentityProvider(broker.getAlias()).close();
-        org = testRealm().organizations().get(id).toRepresentation();
-        getCleanup().addCleanup(() -> testRealm().organizations().get(id).delete().close());
+        // set the idp domain to the first domain used to create the org.
+        broker.getConfig().put(OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE, orgDomains[0]);
+        testRealm.identityProviders().create(broker).close();
+        testCleanup.addCleanup(testRealm.identityProviders().get(broker.getAlias())::remove);
+        testRealm.organizations().get(id).identityProviders().addIdentityProvider(broker.getAlias()).close();
+        org = testRealm.organizations().get(id).toRepresentation();
+        testCleanup.addCleanup(() -> testRealm.organizations().get(id).delete().close());
 
         return org;
     }
 
-    protected OrganizationRepresentation createRepresentation(String name, String... orgDomains) {
+    protected static OrganizationRepresentation createRepresentation(String name, String... orgDomains) {
         OrganizationRepresentation org = new OrganizationRepresentation();
         org.setName(name);
 
@@ -188,7 +200,8 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
         log.debug("Updating info on updateAccount page");
         assertFalse(driver.getPageSource().contains("kc.org"));
         updateAccountInformationPage.updateAccountInformation(bc.getUserLogin(), email, "Firstname", "Lastname");
-
+        assertThat(appPage.getRequestType(),is(AppPage.RequestType.AUTH_RESPONSE));
+        
         assertIsMember(email, organization);
     }
 
@@ -219,6 +232,14 @@ public abstract class AbstractOrganizationTest extends AbstractAdminTest  {
     }
 
     protected BrokerConfiguration createBrokerConfiguration() {
-        return new KcOidcBrokerConfiguration();
-    };
+        return new KcOidcBrokerConfiguration() {
+            @Override
+            public RealmRepresentation createProviderRealm() {
+                // enable organizations in the provider realm too just for testing purposes.
+                RealmRepresentation realmRep = super.createProviderRealm();
+                realmRep.setOrganizationsEnabled(true);
+                return realmRep;
+            }
+        };
+    }
 }
