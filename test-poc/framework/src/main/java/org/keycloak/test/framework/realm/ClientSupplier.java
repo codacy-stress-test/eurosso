@@ -8,6 +8,7 @@ import org.keycloak.test.framework.TestClient;
 import org.keycloak.test.framework.injection.InstanceWrapper;
 import org.keycloak.test.framework.injection.LifeCycle;
 import org.keycloak.test.framework.injection.Registry;
+import org.keycloak.test.framework.injection.RequestedInstance;
 import org.keycloak.test.framework.injection.Supplier;
 import org.keycloak.test.framework.injection.SupplierHelpers;
 
@@ -28,6 +29,7 @@ public class ClientSupplier implements Supplier<ClientResource, TestClient> {
     @Override
     public InstanceWrapper<ClientResource, TestClient> getValue(Registry registry, TestClient annotation) {
         InstanceWrapper<ClientResource, TestClient> wrapper = new InstanceWrapper<>(this, annotation);
+        LifeCycle lifecycle = annotation.lifecycle();
 
         RealmResource realm = registry.getDependency(RealmResource.class, wrapper);
 
@@ -35,7 +37,8 @@ public class ClientSupplier implements Supplier<ClientResource, TestClient> {
         ClientRepresentation clientRepresentation = config.getRepresentation();
 
         if (clientRepresentation.getClientId() == null) {
-            clientRepresentation.setClientId(registry.getCurrentContext().getRequiredTestClass().getSimpleName());
+            String clientId = lifecycle.equals(LifeCycle.GLOBAL) ? config.getClass().getSimpleName() : registry.getCurrentContext().getRequiredTestClass().getSimpleName();
+            clientRepresentation.setClientId(clientId);
         }
 
         Response response = realm.clients().create(clientRepresentation);
@@ -48,20 +51,14 @@ public class ClientSupplier implements Supplier<ClientResource, TestClient> {
         wrapper.addNote(CLIENT_UUID_KEY, clientId);
 
         ClientResource clientResource = realm.clients().get(clientId);
-        wrapper.setValue(clientResource);
+        wrapper.setValue(clientResource, lifecycle);
 
         return wrapper;
     }
 
     @Override
-    public LifeCycle getLifeCycle() {
-        return LifeCycle.CLASS;
-    }
-
-    @Override
-    public boolean compatible(InstanceWrapper<ClientResource, TestClient> a, InstanceWrapper<ClientResource, TestClient> b) {
-        return a.getAnnotation().config().equals(b.getAnnotation().config()) &&
-                a.getNote(CLIENT_UUID_KEY, String.class).equals(b.getNote(CLIENT_UUID_KEY, String.class));
+    public boolean compatible(InstanceWrapper<ClientResource, TestClient> a, RequestedInstance<ClientResource, TestClient> b) {
+        return a.getAnnotation().config().equals(b.getAnnotation().config());
     }
 
     @Override

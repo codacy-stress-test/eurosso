@@ -10,10 +10,21 @@ public interface Supplier<T, S extends Annotation> {
 
     InstanceWrapper<T, S> getValue(Registry registry, S annotation);
 
-    LifeCycle getLifeCycle();
+    default InstanceWrapper<T, S> getValue(Registry registry, S annotation, Class<? extends T> valueType) {
+        return getValue(registry, annotation);
+    }
 
-    boolean compatible(InstanceWrapper<T, S> a, InstanceWrapper<T, S> b);
+    boolean compatible(InstanceWrapper<T, S> a, RequestedInstance<T, S> b);
 
-    default void close(T instance) {}
+    default void close(T value) {
+    }
+
+    default void close(InstanceWrapper<T, S> instanceWrapper) {
+        close(instanceWrapper.getValue());
+    }
+
+    default String getAlias() {
+        return getClass().getSimpleName();
+    }
 
 }

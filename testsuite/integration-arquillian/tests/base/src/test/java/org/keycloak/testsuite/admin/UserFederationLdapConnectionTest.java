@@ -48,7 +48,7 @@ public class UserFederationLdapConnectionTest extends AbstractAdminTest {
     public static LDAPRule ldapRule = new LDAPRule();
 
     @Test
-    public void testLdapConnections1() {
+    public void testLdapConnections() {
         // Unknown action
         Response response = realm.testLDAPConnection(new TestLdapConnectionRepresentation("unknown", "ldap://localhost:10389", "foo", "bar", "false", null));
         assertStatus(response, 400);
@@ -59,6 +59,14 @@ public class UserFederationLdapConnectionTest extends AbstractAdminTest {
 
         // Connection success
         response = realm.testLDAPConnection(new TestLdapConnectionRepresentation(LDAPServerCapabilitiesManager.TEST_CONNECTION, "ldap://localhost:10389", null, null, "false", null, "false", LDAPConstants.AUTH_TYPE_NONE));
+        assertStatus(response, 204);
+
+        // Connection success with invalid credentials
+        String ldapModelId = testingClient.testing().ldap(REALM_NAME).createLDAPProvider(ldapRule.getConfig(), false);
+        getCleanup().addCleanup(() -> {
+            adminClient.realm(REALM_NAME).components().removeComponent(ldapModelId);;
+        });
+        response = realm.testLDAPConnection(new TestLdapConnectionRepresentation(LDAPServerCapabilitiesManager.TEST_CONNECTION, "ldap://localhost:10389", "invalid-db", ComponentRepresentation.SECRET_VALUE, "false", null, "false", LDAPConstants.AUTH_TYPE_SIMPLE, ldapModelId));
         assertStatus(response, 204);
 
         // Bad authentication
@@ -123,6 +131,7 @@ public class UserFederationLdapConnectionTest extends AbstractAdminTest {
 
     @Test
     public void testLdapConnectionMoreServers() {
+
         // Both servers work
         Response response = realm.testLDAPConnection(new TestLdapConnectionRepresentation(LDAPServerCapabilitiesManager.TEST_AUTHENTICATION, "ldap://localhost:10389 ldaps://localhost:10636", "uid=admin,ou=system", "secret", "true", null));
         assertStatus(response, 204);
@@ -147,11 +156,23 @@ public class UserFederationLdapConnectionTest extends AbstractAdminTest {
         response = realm.testLDAPConnection(new TestLdapConnectionRepresentation(LDAPServerCapabilitiesManager.TEST_AUTHENTICATION, "ldap://localhostt:10389 ldaps://localhostt:10636", "uid=admin,ou=system", "secret", "true", null));
         assertStatus(response, 400);
 
+        // create LDAP component model using ldap
+        Map<String, String> cfg = ldapRule.getConfig();
+        cfg.put(LDAPConstants.CONNECTION_URL, "ldap://invalid:10389 ldap://localhost:10389");
+        cfg.put(LDAPConstants.CONNECTION_TIMEOUT, "1000");
+        String ldapModelId = testingClient.testing().ldap(REALM_NAME).createLDAPProvider(cfg, false);
+
+        // Only 2nd server works with stored LDAP federation provider
+        response = realm.testLDAPConnection(new TestLdapConnectionRepresentation(LDAPServerCapabilitiesManager.TEST_AUTHENTICATION,
+                cfg.get(LDAPConstants.CONNECTION_URL), cfg.get(LDAPConstants.BIND_DN), ComponentRepresentation.SECRET_VALUE,
+                cfg.get(LDAPConstants.USE_TRUSTSTORE_SPI), cfg.get(LDAPConstants.CONNECTION_TIMEOUT),cfg.get(LDAPConstants.START_TLS),
+                cfg.get(LDAPConstants.AUTH_TYPE), ldapModelId));
+        assertStatus(response, 204);
     }
 
     @Test
     public void testLdapConnectionComponentAlreadyCreated() {
-        // create ldap componnet model using ldaps
+        // create ldap component model using ldaps
         Map<String, String> cfg = ldapRule.getConfig();
         cfg.put(LDAPConstants.CONNECTION_URL, "ldaps://localhost:10636");
         cfg.put(LDAPConstants.START_TLS, "false");

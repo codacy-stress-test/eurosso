@@ -59,6 +59,10 @@ public class GroupPolicyProvider implements PolicyProvider {
         for (GroupPolicyRepresentation.GroupDefinition definition : policy.getGroups()) {
             GroupModel allowedGroup = realm.getGroupById(definition.getId());
 
+            if (allowedGroup == null) {
+                continue;
+            }
+
             for (int i = 0; i < groupsClaim.size(); i++) {
                 String group = groupsClaim.asString(i);
 
@@ -77,7 +81,7 @@ public class GroupPolicyProvider implements PolicyProvider {
                 }
             }
         }
-        logger.debugv("Groups policy {} evaluated to {} with identity groups {}", policy.getName(), evaluation.getEffect(), groupsClaim);
+        logger.debugf("Groups policy %s evaluated to %s with identity groups %s", policy.getName(), evaluation.getEffect(), groupsClaim);
     }
 
     @Override

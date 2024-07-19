@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.net.URI;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -38,13 +39,21 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class VerifiableCredential {
 
+    public static final String VC_CONTEXT_V1 = "https://www.w3.org/ns/credentials/v1";
+    public static final String VC_CONTEXT_V2 = "https://www.w3.org/ns/credentials/v2";
+
+    /**
+     * @context: The value of the @context property MUST be an ordered set where the first item is a URL with the
+     * value https://www.w3.org/ns/credentials/v2. Subsequent items in the ordered set MUST be composed of any
+     * combination of URLs and/or objects, where each is processable as a JSON-LD Context.
+     */
     @JsonProperty("@context")
-    private List<String> context;
+    private List<String> context = new ArrayList<>(List.of(VC_CONTEXT_V1));
     private List<String> type = new ArrayList<>();
     private URI issuer;
-    private Date issuanceDate;
+    private Instant issuanceDate;
     private URI id;
-    private Date expirationDate;
+    private Instant expirationDate;
     private CredentialSubject credentialSubject = new CredentialSubject();
     @JsonIgnore
     private Map<String, Object> additionalProperties = new HashMap<>();
@@ -87,11 +96,11 @@ public class VerifiableCredential {
         return this;
     }
 
-    public Date getIssuanceDate() {
+    public Instant getIssuanceDate() {
         return issuanceDate;
     }
 
-    public VerifiableCredential setIssuanceDate(Date issuanceDate) {
+    public VerifiableCredential setIssuanceDate(Instant issuanceDate) {
         this.issuanceDate = issuanceDate;
         return this;
     }
@@ -105,11 +114,11 @@ public class VerifiableCredential {
         return this;
     }
 
-    public Date getExpirationDate() {
+    public Instant getExpirationDate() {
         return expirationDate;
     }
 
-    public VerifiableCredential setExpirationDate(Date expirationDate) {
+    public VerifiableCredential setExpirationDate(Instant expirationDate) {
         this.expirationDate = expirationDate;
         return this;
     }

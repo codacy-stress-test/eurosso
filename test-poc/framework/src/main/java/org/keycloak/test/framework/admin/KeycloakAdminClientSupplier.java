@@ -5,6 +5,7 @@ import org.keycloak.test.framework.TestAdminClient;
 import org.keycloak.test.framework.injection.InstanceWrapper;
 import org.keycloak.test.framework.injection.LifeCycle;
 import org.keycloak.test.framework.injection.Registry;
+import org.keycloak.test.framework.injection.RequestedInstance;
 import org.keycloak.test.framework.injection.Supplier;
 import org.keycloak.test.framework.server.KeycloakTestServer;
 
@@ -27,18 +28,13 @@ public class KeycloakAdminClientSupplier implements Supplier<Keycloak, TestAdmin
         KeycloakTestServer testServer = registry.getDependency(KeycloakTestServer.class, wrapper);
 
         Keycloak keycloak = Keycloak.getInstance(testServer.getBaseUrl(), "master", "admin", "admin", "admin-cli");
-        wrapper.setValue(keycloak);
+        wrapper.setValue(keycloak, LifeCycle.GLOBAL);
 
         return wrapper;
     }
 
     @Override
-    public LifeCycle getLifeCycle() {
-        return LifeCycle.GLOBAL;
-    }
-
-    @Override
-    public boolean compatible(InstanceWrapper<Keycloak, TestAdminClient> a, InstanceWrapper<Keycloak, TestAdminClient> b) {
+    public boolean compatible(InstanceWrapper<Keycloak, TestAdminClient> a, RequestedInstance<Keycloak, TestAdminClient> b) {
         return true;
     }
 

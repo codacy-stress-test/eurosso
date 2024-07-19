@@ -18,9 +18,12 @@
 package org.keycloak.quarkus.runtime.cli.command;
 
 import org.keycloak.common.util.IoUtils;
+import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.quarkus.runtime.cli.PropertyException;
 import org.keycloak.quarkus.runtime.integration.jaxrs.QuarkusKeycloakApplication;
 import org.keycloak.services.managers.ApplianceBootstrap;
+import org.keycloak.services.resources.KeycloakApplication;
 
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
@@ -78,6 +81,9 @@ public class BootstrapAdminService extends AbstractNonServerCommand {
             if (!clientSecret.equals(confirmClientSecret)) {
                 throw new PropertyException("Client secrets do not match");
             }
+            if (clientSecret.isBlank()) {
+                throw new PropertyException("Client secret must not be blank");
+            }
         } else {
             clientSecret = getFromEnv(clientSecretEnv);
         }
@@ -94,7 +100,9 @@ public class BootstrapAdminService extends AbstractNonServerCommand {
     @Override
     public void onStart(QuarkusKeycloakApplication application) {
         //BootstrapAdmin bootstrap = spec.commandLine().getParent().getCommand();
-        application.createTemporaryMasterRealmAdminService(clientId, clientSecret, /*bootstrap.expiration,*/ null);
+        KeycloakSessionFactory sessionFactory = KeycloakApplication.getSessionFactory();
+        KeycloakModelUtils.runJobInTransaction(sessionFactory, session -> application
+                .createTemporaryMasterRealmAdminService(clientId, clientSecret, /* bootstrap.expiration, */ session));
     }
 
 }
