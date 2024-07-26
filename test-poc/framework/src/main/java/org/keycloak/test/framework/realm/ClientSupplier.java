@@ -4,21 +4,19 @@ import jakarta.ws.rs.core.Response;
 import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.ClientRepresentation;
-import org.keycloak.test.framework.TestClient;
-import org.keycloak.test.framework.injection.InstanceWrapper;
-import org.keycloak.test.framework.injection.LifeCycle;
-import org.keycloak.test.framework.injection.Registry;
+import org.keycloak.test.framework.annotations.InjectClient;
+import org.keycloak.test.framework.injection.InstanceContext;
 import org.keycloak.test.framework.injection.RequestedInstance;
 import org.keycloak.test.framework.injection.Supplier;
 import org.keycloak.test.framework.injection.SupplierHelpers;
 
-public class ClientSupplier implements Supplier<ClientResource, TestClient> {
+public class ClientSupplier implements Supplier<ClientResource, InjectClient> {
 
     private static final String CLIENT_UUID_KEY = "clientUuid";
 
     @Override
-    public Class<TestClient> getAnnotationClass() {
-        return TestClient.class;
+    public Class<InjectClient> getAnnotationClass() {
+        return InjectClient.class;
     }
 
     @Override
@@ -27,17 +25,14 @@ public class ClientSupplier implements Supplier<ClientResource, TestClient> {
     }
 
     @Override
-    public InstanceWrapper<ClientResource, TestClient> getValue(Registry registry, TestClient annotation) {
-        InstanceWrapper<ClientResource, TestClient> wrapper = new InstanceWrapper<>(this, annotation);
-        LifeCycle lifecycle = annotation.lifecycle();
+    public ClientResource getValue(InstanceContext<ClientResource, InjectClient> instanceContext) {
+        RealmResource realm = instanceContext.getDependency(RealmResource.class);
 
-        RealmResource realm = registry.getDependency(RealmResource.class, wrapper);
-
-        ClientConfig config = SupplierHelpers.getInstance(annotation.config());
+        ClientConfig config = SupplierHelpers.getInstance(instanceContext.getAnnotation().config());
         ClientRepresentation clientRepresentation = config.getRepresentation();
 
         if (clientRepresentation.getClientId() == null) {
-            String clientId = lifecycle.equals(LifeCycle.GLOBAL) ? config.getClass().getSimpleName() : registry.getCurrentContext().getRequiredTestClass().getSimpleName();
+            String clientId = instanceContext.getRef();
             clientRepresentation.setClientId(clientId);
         }
 
@@ -48,22 +43,19 @@ public class ClientSupplier implements Supplier<ClientResource, TestClient> {
 
         response.close();
 
-        wrapper.addNote(CLIENT_UUID_KEY, clientId);
+        instanceContext.addNote(CLIENT_UUID_KEY, clientId);
 
-        ClientResource clientResource = realm.clients().get(clientId);
-        wrapper.setValue(clientResource, lifecycle);
-
-        return wrapper;
+        return realm.clients().get(clientId);
     }
 
     @Override
-    public boolean compatible(InstanceWrapper<ClientResource, TestClient> a, RequestedInstance<ClientResource, TestClient> b) {
+    public boolean compatible(InstanceContext<ClientResource, InjectClient> a, RequestedInstance<ClientResource, InjectClient> b) {
         return a.getAnnotation().config().equals(b.getAnnotation().config());
     }
 
     @Override
-    public void close(ClientResource client) {
-        client.remove();
+    public void close(InstanceContext<ClientResource, InjectClient> instanceContext) {
+        instanceContext.getValue().remove();
     }
 
 }
