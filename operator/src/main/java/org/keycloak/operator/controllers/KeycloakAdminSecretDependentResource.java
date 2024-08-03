@@ -2,7 +2,6 @@ package org.keycloak.operator.controllers;
 
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
-import io.fabric8.kubernetes.api.model.networking.v1.Ingress;
 import io.fabric8.kubernetes.client.utils.KubernetesResourceUtil;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ResourceDiscriminator;
@@ -23,10 +22,10 @@ import java.util.UUID;
 
 @KubernetesDependent(labelSelector = Constants.DEFAULT_LABELS_AS_STRING, resourceDiscriminator = KeycloakAdminSecretDependentResource.NameResourceDiscriminator.class)
 public class KeycloakAdminSecretDependentResource extends KubernetesDependentResource<Secret, Keycloak> implements Creator<Secret, Keycloak>, GarbageCollected<Keycloak> {
-
-    public static class EnabledCondition implements Condition<Ingress, Keycloak> {
+    
+    public static class EnabledCondition implements Condition<Secret, Keycloak> {
         @Override
-        public boolean isMet(DependentResource<Ingress, Keycloak> dependentResource, Keycloak primary,
+        public boolean isMet(DependentResource<Secret, Keycloak> dependentResource, Keycloak primary,
                 Context<Keycloak> context) {
             return Optional.ofNullable(primary.getSpec().getBootstrapAdminSpec()).map(BootstrapAdminSpec::getUser)
                     .map(BootstrapAdminSpec.User::getSecret).filter(s -> !s.equals(KeycloakAdminSecretDependentResource.getName(primary))).isEmpty();

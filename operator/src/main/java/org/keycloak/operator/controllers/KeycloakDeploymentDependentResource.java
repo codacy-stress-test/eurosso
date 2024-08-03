@@ -35,7 +35,7 @@ import io.fabric8.kubernetes.api.model.apps.StatefulSetSpec;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.CRUDKubernetesDependentResource;
-import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependent;
+import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependentResourceConfigBuilder;
 import io.quarkus.logging.Log;
 
 import org.keycloak.operator.Config;
@@ -68,13 +68,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import jakarta.inject.Inject;
-
 import static org.keycloak.operator.Utils.addResources;
 import static org.keycloak.operator.controllers.KeycloakDistConfigurator.getKeycloakOptionEnvVarName;
 import static org.keycloak.operator.crds.v2alpha1.CRDUtils.isTlsConfigured;
 
-@KubernetesDependent(labelSelector = Constants.DEFAULT_LABELS_AS_STRING)
 public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependentResource<StatefulSet, Keycloak> {
 
     private static final List<String> COPY_ENV = Arrays.asList("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY");
@@ -92,20 +89,23 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
 
     public static final String OPTIMIZED_ARG = "--optimized";
 
-    @Inject
     Config operatorConfig;
 
-    @Inject
     WatchedResources watchedResources;
 
-    @Inject
     KeycloakDistConfigurator distConfigurator;
 
     private boolean useServiceCaCrt;
 
-    public KeycloakDeploymentDependentResource() {
+    public KeycloakDeploymentDependentResource(Config operatorConfig, WatchedResources watchedResources, KeycloakDistConfigurator distConfigurator) {
         super(StatefulSet.class);
+        this.operatorConfig = operatorConfig;
+        this.watchedResources = watchedResources;
+        this.distConfigurator = distConfigurator;
         useServiceCaCrt = Files.exists(Path.of(SERVICE_CA_CRT));
+        this.configureWith(new KubernetesDependentResourceConfigBuilder<StatefulSet>()
+                .withLabelSelector(Constants.DEFAULT_LABELS_AS_STRING)
+                .build());
     }
 
     public void setUseServiceCaCrt(boolean useServiceCaCrt) {
