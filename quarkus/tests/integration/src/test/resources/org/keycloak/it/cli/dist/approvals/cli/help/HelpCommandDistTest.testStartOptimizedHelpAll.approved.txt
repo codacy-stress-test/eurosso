@@ -75,7 +75,8 @@ Cache:
 --cache-stack <stack>
                      Define the default stack to use for cluster communication and node discovery.
                        This option only takes effect if 'cache' is set to 'ispn'. Default: udp.
-                       Built-in values include: tcp, udp, kubernetes, ec2, azure, google
+                       Possible values are: tcp, udp, kubernetes, ec2, azure, google, or a custom
+                       one.
 
 Config:
 
@@ -216,8 +217,8 @@ HTTP(S):
                      The password of the key store file. Default: password.
 --https-key-store-type <type>
                      The type of the key store file. If not given, the type is automatically
-                       detected based on the file name. If 'fips-mode' is set to 'strict' and no
-                       value is set, it defaults to 'BCFKS'.
+                       detected based on the file extension. If 'fips-mode' is set to 'strict' and
+                       no value is set, it defaults to 'BCFKS'.
 --https-port <port>  The used HTTPS port. Default: 8443.
 --https-protocols <protocols>
                      The list of protocols to explicitly enable. Default: TLSv1.3,TLSv1.2.
@@ -230,7 +231,7 @@ HTTP(S):
                        instead, see the docs for details.
 --https-trust-store-type <type>
                      DEPRECATED. The type of the trust store file. If not given, the type is
-                       automatically detected based on the file name. If 'fips-mode' is set to
+                       automatically detected based on the file extension. If 'fips-mode' is set to
                        'strict' and no value is set, it defaults to 'BCFKS'. Use the System
                        Truststore instead, see the docs for details.
 
@@ -376,10 +377,19 @@ Tracing (Preview):
                      Preview: OpenTelemetry protocol used for the telemetry data. Possible values
                        are: grpc, http/protobuf. Default: grpc. Available only when Tracing is
                        enabled.
+--tracing-resource-attributes <attributes>
+                     Preview: OpenTelemetry resource attributes present in the exported trace to
+                       characterize the telemetry producer. Values in format 'key1=val1,key2=val2'.
+                       For more information, check the Tracing guide. Available only when Tracing
+                       is enabled.
 --tracing-sampler-ratio <ratio>
                      Preview: OpenTelemetry sampler ratio. Probability that a span will be sampled.
                        Expected double value in interval <0,1). Default: 1.0. Available only when
                        Tracing is enabled.
+--tracing-service-name <name>
+                     Preview: OpenTelemetry service name. Takes precedence over 'service.name'
+                       defined in the 'tracing-resource-attributes' property. Default: keycloak.
+                       Available only when Tracing is enabled.
 
 Truststore:
 

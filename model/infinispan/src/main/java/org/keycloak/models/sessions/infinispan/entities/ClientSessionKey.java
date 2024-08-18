@@ -15,16 +15,17 @@
  * limitations under the License.
  */
 
-package org.keycloak.testsuite.organization.member;
+package org.keycloak.models.sessions.infinispan.entities;
 
-import org.keycloak.common.Profile.Feature;
-import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
-import org.keycloak.testsuite.forms.BruteForceTest;
+import org.infinispan.client.hotrod.RemoteCache;
+import org.infinispan.protostream.annotations.Proto;
+import org.infinispan.protostream.annotations.ProtoTypeId;
+import org.keycloak.marshalling.Marshalling;
 
 /**
- * Remove this test class once the {@link Feature#ORGANIZATION} is supported
+ * The key stored in the {@link RemoteCache} for {@link RemoteAuthenticatedClientSessionEntity}.
  */
-@EnableFeature(Feature.ORGANIZATION)
-public class OrganizationBruteForceTest extends BruteForceTest {
-
+@ProtoTypeId(Marshalling.CLIENT_SESSION_KEY)
+@Proto
+public record ClientSessionKey(String userSessionId, String clientId) {
 }
