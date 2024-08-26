@@ -31,7 +31,7 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.MapJoin;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
-import org.apache.commons.lang3.StringUtils;
+import java.util.stream.Collectors;
 import org.hibernate.Session;
 import org.jboss.logging.Logger;
 import org.keycloak.broker.provider.IdentityProvider;
@@ -39,11 +39,13 @@ import org.keycloak.broker.provider.IdentityProviderFactory;
 import org.keycloak.broker.social.SocialIdentityProvider;
 import org.keycloak.connections.jpa.JpaConnectionProvider;
 import org.keycloak.models.IDPProvider;
+import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelException;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.jpa.entities.IdentityProviderEntity;
+import org.keycloak.models.jpa.entities.IdentityProviderMapperEntity;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.utils.StringUtil;
 
@@ -51,7 +53,11 @@ import static org.keycloak.models.IdentityProviderModel.ALIAS;
 import static org.keycloak.models.IdentityProviderModel.AUTHENTICATE_BY_DEFAULT;
 import static org.keycloak.models.IdentityProviderModel.ENABLED;
 import static org.keycloak.models.IdentityProviderModel.FIRST_BROKER_LOGIN_FLOW_ID;
+import static org.keycloak.models.IdentityProviderModel.HIDE_ON_LOGIN;
+import static org.keycloak.models.IdentityProviderModel.LINK_ONLY;
+import static org.keycloak.models.IdentityProviderModel.ORGANIZATION_ID;
 import static org.keycloak.models.IdentityProviderModel.POST_BROKER_LOGIN_FLOW_ID;
+import static org.keycloak.models.IdentityProviderModel.SEARCH;
 import static org.keycloak.models.jpa.PaginationUtils.paginateQuery;
 import static org.keycloak.utils.StreamsUtil.closing;
 
@@ -92,8 +98,10 @@ public class JpaIDPProvider implements IDPProvider {
         entity.setAuthenticateByDefault(identityProvider.isAuthenticateByDefault());
         entity.setFirstBrokerLoginFlowId(identityProvider.getFirstBrokerLoginFlowId());
         entity.setPostBrokerLoginFlowId(identityProvider.getPostBrokerLoginFlowId());
+        entity.setOrganizationId(identityProvider.getOrganizationId());
         entity.setConfig(identityProvider.getConfig());
         entity.setLinkOnly(identityProvider.isLinkOnly());
+        entity.setHideOnLogin(identityProvider.isHideOnLogin());
         em.persist(entity);
         // flush so that constraint violations are flagged and converted into model exception now rather than at the end of the tx.
         em.flush();
@@ -113,10 +121,12 @@ public class JpaIDPProvider implements IDPProvider {
         entity.setAuthenticateByDefault(identityProvider.isAuthenticateByDefault());
         entity.setFirstBrokerLoginFlowId(identityProvider.getFirstBrokerLoginFlowId());
         entity.setPostBrokerLoginFlowId(identityProvider.getPostBrokerLoginFlowId());
+        entity.setOrganizationId(identityProvider.getOrganizationId());
         entity.setAddReadTokenRoleOnCreate(identityProvider.isAddReadTokenRoleOnCreate());
         entity.setStoreToken(identityProvider.isStoreToken());
         entity.setConfig(identityProvider.getConfig());
         entity.setLinkOnly(identityProvider.isLinkOnly());
+        entity.setHideOnLogin(identityProvider.isHideOnLogin());
 
         // flush so that constraint violations are flagged and converted into model exception now rather than at the end of the tx.
         em.flush();
@@ -148,13 +158,16 @@ public class JpaIDPProvider implements IDPProvider {
         IdentityProviderEntity entity = this.getEntityByAlias(alias);
 
         if (entity != null) {
-            //call toModel(entity) now as after em.remove(entity) and the flush it might throw LazyInitializationException 
+            //call toModel(entity) now as after em.remove(entity) and the flush it might throw LazyInitializationException
             //when accessing the config of the entity (entity.getConfig()) withing the toModel(entity)
             IdentityProviderModel model = toModel(entity);
 
             em.remove(entity);
             // flush so that constraint violations are flagged and converted into model exception now rather than at the end of the tx.
             em.flush();
+
+            session.identityProviders().getMappersByAliasStream(alias).collect(Collectors.toList())
+                    .forEach(session.identityProviders()::removeMapper);
 
             // send identity provider removed event.
             RealmModel realm = this.getRealm();
@@ -200,24 +213,6 @@ public class JpaIDPProvider implements IDPProvider {
     }
 
     @Override
-    public Stream<IdentityProviderModel> getAllStream(String search, Integer first, Integer max) {
-        CriteriaBuilder builder = em.getCriteriaBuilder();
-        CriteriaQuery<IdentityProviderEntity> query = builder.createQuery(IdentityProviderEntity.class);
-        Root<IdentityProviderEntity> idp = query.from(IdentityProviderEntity.class);
-
-        List<Predicate> predicates = new ArrayList<>();
-        predicates.add(builder.equal(idp.get("realmId"), getRealm().getId()));
-
-        if (StringUtil.isNotBlank(search)) {
-            predicates.add(this.getAliasSearchPredicate(search, builder, idp));
-        }
-
-        query.orderBy(builder.asc(idp.get(ALIAS)));
-        TypedQuery<IdentityProviderEntity> typedQuery = em.createQuery(query.select(idp).where(predicates.toArray(Predicate[]::new)));
-        return closing(paginateQuery(typedQuery, first, max).getResultStream()).map(this::toModel);
-    }
-
-    @Override
     public Stream<IdentityProviderModel> getAllStream(Map<String, String> attrs, Integer first, Integer max) {
         CriteriaBuilder builder = em.getCriteriaBuilder();
         CriteriaQuery<IdentityProviderEntity> query = builder.createQuery(IdentityProviderEntity.class);
@@ -234,15 +229,29 @@ public class JpaIDPProvider implements IDPProvider {
                     continue;
                 }
                 switch(key) {
+                    case AUTHENTICATE_BY_DEFAULT:
                     case ENABLED:
-                    case AUTHENTICATE_BY_DEFAULT: {
-                        predicates.add(builder.equal(idp.get(key), Boolean.valueOf(value)));
+                    case HIDE_ON_LOGIN:
+                    case LINK_ONLY: {
+                        if (Boolean.parseBoolean(value)) {
+                            predicates.add(builder.isTrue(idp.get(key)));
+                        } else {
+                            predicates.add(builder.isFalse(idp.get(key)));
+                        }
                         break;
-                    } case FIRST_BROKER_LOGIN_FLOW_ID: {
-                        if (StringUtils.isBlank(value)) {
+                    }
+                    case FIRST_BROKER_LOGIN_FLOW_ID:
+                    case ORGANIZATION_ID: {
+                        if (StringUtil.isBlank(value)) {
                             predicates.add(builder.isNull(idp.get(key)));
                         } else {
                             predicates.add(builder.equal(idp.get(key), value));
+                        }
+                        break;
+                    }
+                    case SEARCH: {
+                        if (StringUtil.isNotBlank(value)) {
+                            predicates.add(this.getAliasSearchPredicate(value, builder, idp));
                         }
                         break;
                     } default: {
@@ -308,6 +317,104 @@ public class JpaIDPProvider implements IDPProvider {
 
     @Override
     public void close() {
+    }
+
+    @Override
+    public IdentityProviderMapperModel createMapper(IdentityProviderMapperModel model) {
+        checkUniqueMapperNamePerIdentityProvider(model);
+
+        IdentityProviderMapperEntity entity = new IdentityProviderMapperEntity();
+        entity.setId(model.getId() == null ? KeycloakModelUtils.generateId() : model.getId());
+        entity.setName(model.getName());
+        entity.setIdentityProviderAlias(model.getIdentityProviderAlias());
+        entity.setIdentityProviderMapper(model.getIdentityProviderMapper());
+        entity.setRealmId(getRealm().getId());
+        entity.setConfig(model.getConfig());
+
+        em.persist(entity);
+        model.setId(entity.getId());
+
+        return model;
+    }
+
+    @Override
+    public void updateMapper(IdentityProviderMapperModel model) {
+        IdentityProviderMapperEntity entity = getMapperEntityById(model.getId(), true);
+        if (!model.getName().equals(entity.getName())) {
+            checkUniqueMapperNamePerIdentityProvider(model);
+        }
+
+        entity.setName(model.getName());
+        entity.setIdentityProviderAlias(model.getIdentityProviderAlias());
+        entity.setIdentityProviderMapper(model.getIdentityProviderMapper());
+        entity.setConfig(model.getConfig());
+    }
+
+    @Override
+    public boolean removeMapper(IdentityProviderMapperModel model) {
+        em.remove(getMapperEntityById(model.getId(), true));
+        return true;
+    }
+
+    @Override
+    public void removeAllMappers() {
+        CriteriaBuilder builder = em.getCriteriaBuilder();
+        CriteriaDelete<IdentityProviderMapperEntity> delete = builder.createCriteriaDelete(IdentityProviderMapperEntity.class);
+        Root<IdentityProviderMapperEntity> mapper = delete.from(IdentityProviderMapperEntity.class);
+        delete.where(builder.equal(mapper.get("realmId"), getRealm().getId()));
+        em.createQuery(delete).executeUpdate();
+    }
+
+    @Override
+    public IdentityProviderMapperModel getMapperById(String id) {
+        return toModel(getMapperEntityById(id, false));
+    }
+
+    @Override
+    public IdentityProviderMapperModel getMapperByName(String identityProviderAlias, String name) {
+        CriteriaBuilder builder = em.getCriteriaBuilder();
+        CriteriaQuery<IdentityProviderMapperEntity> query = builder.createQuery(IdentityProviderMapperEntity.class);
+        Root<IdentityProviderMapperEntity> mapper = query.from(IdentityProviderMapperEntity.class);
+
+        Predicate predicate = builder.and(
+                builder.equal(mapper.get("realmId"), getRealm().getId()),
+                builder.equal(mapper.get("identityProviderAlias"), identityProviderAlias),
+                builder.equal(mapper.get("name"), name));
+
+        TypedQuery<IdentityProviderMapperEntity> typedQuery = em.createQuery(query.select(mapper).where(predicate));
+        try {
+            return toModel(typedQuery.getSingleResult());
+        } catch (NoResultException nre) {
+            return null;
+        }
+    }
+
+    @Override
+    public Stream<IdentityProviderMapperModel> getMappersStream() {
+        CriteriaBuilder builder = em.getCriteriaBuilder();
+        CriteriaQuery<IdentityProviderMapperEntity> query = builder.createQuery(IdentityProviderMapperEntity.class);
+        Root<IdentityProviderMapperEntity> mapper = query.from(IdentityProviderMapperEntity.class);
+
+        Predicate predicate = builder.equal(mapper.get("realmId"), getRealm().getId());
+
+        TypedQuery<IdentityProviderMapperEntity> typedQuery = em.createQuery(query.select(mapper).where(predicate));
+
+        return closing(typedQuery.getResultStream().map(this::toModel));
+    }
+
+    @Override
+    public Stream<IdentityProviderMapperModel> getMappersByAliasStream(String identityProviderAlias) {
+        CriteriaBuilder builder = em.getCriteriaBuilder();
+        CriteriaQuery<IdentityProviderMapperEntity> query = builder.createQuery(IdentityProviderMapperEntity.class);
+        Root<IdentityProviderMapperEntity> mapper = query.from(IdentityProviderMapperEntity.class);
+
+        Predicate predicate = builder.and(
+                builder.equal(mapper.get("realmId"), getRealm().getId()),
+                builder.equal(mapper.get("identityProviderAlias"), identityProviderAlias));
+
+        TypedQuery<IdentityProviderMapperEntity> typedQuery = em.createQuery(query.select(mapper).where(predicate));
+
+        return closing(typedQuery.getResultStream().map(this::toModel));
     }
 
     private IdentityProviderEntity getEntityById(String id, boolean failIfNotFound) {
@@ -377,10 +484,12 @@ public class JpaIDPProvider implements IDPProvider {
         identityProviderModel.setConfig(config);
         identityProviderModel.setEnabled(entity.isEnabled());
         identityProviderModel.setLinkOnly(entity.isLinkOnly());
+        identityProviderModel.setHideOnLogin(entity.isHideOnLogin());
         identityProviderModel.setTrustEmail(entity.isTrustEmail());
         identityProviderModel.setAuthenticateByDefault(entity.isAuthenticateByDefault());
         identityProviderModel.setFirstBrokerLoginFlowId(entity.getFirstBrokerLoginFlowId());
         identityProviderModel.setPostBrokerLoginFlowId(entity.getPostBrokerLoginFlowId());
+        identityProviderModel.setOrganizationId(entity.getOrganizationId());
         identityProviderModel.setStoreToken(entity.isStoreToken());
         identityProviderModel.setAddReadTokenRoleOnCreate(entity.isAddReadTokenRoleOnCreate());
 
@@ -400,6 +509,42 @@ public class JpaIDPProvider implements IDPProvider {
             logger.warn("Couldn't find a suitable identity provider factory for " + providerId);
             return new IdentityProviderModel();
         }
+    }
+
+    private void checkUniqueMapperNamePerIdentityProvider(IdentityProviderMapperModel model) {
+        if (session.identityProviders().getMapperByName(model.getIdentityProviderAlias(), model.getName()) != null) {
+            throw new ModelException("Identity provider mapper name must be unique per identity provider");
+        }
+    }
+
+    private IdentityProviderMapperEntity getMapperEntityById(String id, boolean failIfNotFound) {
+        IdentityProviderMapperEntity entity = em.find(IdentityProviderMapperEntity.class, id);
+
+        if (failIfNotFound && entity == null) {
+            throw new ModelException("Identity Provider Mapper with id [" + id + "] does not exist");
+        }
+
+        if (entity == null) return null;
+
+        // check realm to ensure this entity is fetched in the context of the correct realm.
+        if (!getRealm().getId().equals(entity.getRealmId())) {
+            throw new ModelException("Identity Provider Mapper with id [" + entity.getId() + "] does not belong to realm [" + getRealm().getName() + "]");
+        }
+
+        return entity;
+    }
+
+    private IdentityProviderMapperModel toModel(IdentityProviderMapperEntity entity) {
+        if (entity == null) return null;
+
+        IdentityProviderMapperModel mapping = new IdentityProviderMapperModel();
+        mapping.setId(entity.getId());
+        mapping.setName(entity.getName());
+        mapping.setIdentityProviderAlias(entity.getIdentityProviderAlias());
+        mapping.setIdentityProviderMapper(entity.getIdentityProviderMapper());
+        Map<String, String> config = entity.getConfig() == null ? new HashMap<>() : new HashMap<>(entity.getConfig());
+        mapping.setConfig(config);
+        return mapping;
     }
 
     private RealmModel getRealm() {
