@@ -168,6 +168,12 @@ on the console during migration. In this case, the statements must be run manual
 
 Also, the `kc.org` and `hideOnLoginPage` configuration attributes were migrated to the identity provider itself, to allow for more efficient queries when searching for providers. As such, API clients should use the `getOrganizationId/setOrganizationId` and `isHideOnLogin/setHideOnLogin` methods in the `IdentityProviderRepresentation`, and avoid setting these properties using the legacy config attributes that are now deprecated.
 
+= Removal of GELF logging handler
+
+GELF support has been deprecated for a while now, and with this release it has been finally removed from {project_name}.
+Other log handlers are available and fully supported to be used as a replacement of GELF, for example Syslog. For details
+see the https://www.keycloak.org/server/logging[Logging guide].
+
 = Paths for `common` theme resources have changed
 
 Some of the paths for the `common` resources of the `keycloak` theme have changed, specifically the resources for third-party libraries. Make sure to update your custom themes accordingly:
@@ -183,3 +189,49 @@ Additionally, the following resources have been removed from the `common` theme:
 - `node_modules/jquery`
 
 If you previously used any of the removed resources in your theme, make sure to add them to your own theme resources instead.
+
+= Additional datasources now require using XA
+
+{project_name} by default does not use XA datasources. However, this is considered unsafe if more than one datasource is used.
+Starting with this release, you need to use XA datasources if you are adding additional datasources to {project_name}.
+If the default datasource supports XA, you can do this by setting the `--transaction-xa-enabled=true` option. For additional datasources, you need to use
+the `quarkus.datasource.<your-datasource-name>.jdbc.transactions=xa` option in your `quarkus.properties` file.
+At most one datasource can be non-XA.
+Recovery isn't supported when you don't have persistent storage for the transaction store.
+
+= Hostname v1 feature removed
+
+The deprecated hostname v1 feature was removed. This feature was deprecated in {project_name} 25 and replaced by hostname v2. If you are still using this feature, you must migrate to hostname v2. For more details, see the https://www.keycloak.org/server/hostname[Configuring the hostname (v2)] and https://www.keycloak.org/docs/latest/upgrading/#new-hostname-options[the initial migration guide].
+
+= Proxy option removed
+
+The deprecated `proxy` option was removed. This option was deprecated in {project_name} 24 and replaced by the `proxy-headers` option in combination with hostname options as needed. For more details, see https://www.keycloak.org/server/reverseproxy[using a reverse proxy] and https://www.keycloak.org/docs/latest/upgrading/index.html#deprecated-proxy-option[the initial upgrading guide].
+
+= All user sessions are persisted by default
+
+Since the database is now the source of truth for user sessions, it is possible to restrict the size of the session caches to reduce memory usage.
+If you use the default `conf/cache-ispn.xml` file the caches for storing user and client sessions are by default configured to store only 10000 sessions and one owner for each entry.
+
+Update your custom embedded Infinispan cache configuration file with configuration similar to one shown below for caches `sessions`, `clientSessions`, `offlineSessions`, and `offlineClientSessions`:
+
+[,xml]
+----
+<distributed-cache name="sessions" owners="1">
+    <!-- other configuration -->
+    <memory max-count="10000"/>
+</distributed-cache>
+----
+
+For more details proceed to the https://www.keycloak.org/server/caching[Configuring distributed caches] guide.
+
+= Support for legacy `redirect_uri` parameter and SPI options has been removed
+
+Previous versions of {project_name} had supported automatic logout of the user and redirecting to the application by opening logout endpoint URL such as
+`http(s)://example-host/auth/realms/my-realm-name/protocol/openid-connect/logout?redirect_uri=encodedRedirectUri`. This functionality was deprecated in {project_name} 18 and has been removed in this version in favor of following the OpenID Connect specification.
+
+As part of this change the following related configuration options for the SPI have been removed:
+
+- `--spi-login-protocol-openid-connect-legacy-logout-redirect-uri`
+- `--spi-login-protocol-openid-connect-suppress-logout-confirmation-screen`
+
+If you were still making use these options or the `redirect_uri` parameter for logout you should implement the link:https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout specification] instead.

@@ -108,12 +108,13 @@ public class Profile {
 
         CLIENT_TYPES("Client Types", Type.EXPERIMENTAL),
 
-        HOSTNAME_V1("Hostname Options V1", Type.DEPRECATED, 1),
         HOSTNAME_V2("Hostname Options V2", Type.DEFAULT, 2),
 
         PERSISTENT_USER_SESSIONS("Persistent online user sessions across restarts and upgrades", Type.DEFAULT),
 
         OID4VC_VCI("Support for the OID4VCI protocol as part of OID4VC.", Type.EXPERIMENTAL),
+
+        OPENTELEMETRY("OpenTelemetry Tracing", Type.PREVIEW),
 
         DECLARATIVE_UI("declarative ui spi", Type.EXPERIMENTAL),
 

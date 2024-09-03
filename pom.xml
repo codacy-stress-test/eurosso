@@ -51,8 +51,8 @@
         <jboss.snapshots.repo.id>jboss-snapshots-repository</jboss.snapshots.repo.id>
         <jboss.snapshots.repo.url>https://s01.oss.sonatype.org/content/repositories/snapshots/</jboss.snapshots.repo.url>
 
-        <quarkus.version>3.13.2</quarkus.version>
-        <quarkus.build.version>3.13.2</quarkus.build.version>
+        <quarkus.version>3.13.3</quarkus.version>
+        <quarkus.build.version>3.13.3</quarkus.build.version>
 
         <project.build-time>${timestamp}</project.build-time>
 
@@ -231,8 +231,8 @@
         <server.output.dir.version>${project.version}</server.output.dir.version>
 
         <!-- Frontend -->
-        <node.version>v20.13.0</node.version>
-        <pnpm.version>9.1.0</pnpm.version>
+        <node.version>v20.17.0</node.version>
+        <pnpm.version>9.9.0</pnpm.version>
         <pnpm.args.install>install --prefer-offline --frozen-lockfile --ignore-scripts</pnpm.args.install>
         <!-- The clean step is skipped on Windows -->
         <js.skip.clean>false</js.skip.clean>
@@ -301,6 +301,7 @@
         <module>authz</module>
         <module>misc</module>
         <module>js</module>
+        <module>test-framework</module>
         <module>quarkus</module>
     </modules>
 
@@ -1050,11 +1051,6 @@
             <dependency>
                 <groupId>org.keycloak</groupId>
                 <artifactId>keycloak-authz-policy-common</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.keycloak</groupId>
-                <artifactId>keycloak-policy-enforcer-tests</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

@@ -2,16 +2,16 @@
   "name": "root",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.1.0+sha256.22e36fba7f4880ecf749a5ca128b8435da085ecd49575e7fb9e64d6bf4fad394",
+  "packageManager": "pnpm@9.9.0+sha512.60c18acd138bff695d339be6ad13f7e936eea6745660d4cc4a776d5247c540d0edee1a563695c183a66eb917ef88f2b4feb1fc25f32a7adcadc7aaf3438e99c1",
   "scripts": {
     "prepare": "husky js/.husky"
   },
   "devDependencies": {
     "@eslint/compat": "^1.1.1",
     "@eslint/eslintrc": "^3.1.0",
-    "@eslint/js": "^9.9.0",
-    "@types/node": "^22.4.1",
-    "eslint": "^9.9.0",
+    "@eslint/js": "^9.9.1",
+    "@types/node": "^22.5.2",
+    "eslint": "^9.9.1",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-cypress": "^3.5.0",
     "eslint-plugin-lodash": "^8.0.0",
@@ -21,12 +21,12 @@
     "eslint-plugin-react": "^7.35.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "husky": "^9.1.5",
-    "lint-staged": "^15.2.9",
+    "lint-staged": "^15.2.10",
     "prettier": "^3.3.3",
-    "tslib": "^2.6.3",
+    "tslib": "^2.7.0",
     "typescript": "^5.5.4",
-    "typescript-eslint": "^8.2.0",
-    "wireit": "^0.14.7"
+    "typescript-eslint": "^8.3.0",
+    "wireit": "^0.14.8"
   },
   "pnpm": {
     "ignoredOptionalDependencies": [
