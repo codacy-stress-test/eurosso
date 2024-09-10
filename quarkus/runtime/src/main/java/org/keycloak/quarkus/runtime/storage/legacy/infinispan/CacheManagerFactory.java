@@ -64,8 +64,10 @@ import org.keycloak.infinispan.util.InfinispanUtils;
 import org.keycloak.marshalling.KeycloakIndexSchemaUtil;
 import org.keycloak.marshalling.KeycloakModelSchema;
 import org.keycloak.marshalling.Marshalling;
-import org.keycloak.models.sessions.infinispan.RootAuthenticationSessionAdapter;
-import org.keycloak.models.sessions.infinispan.entities.LoginFailureEntity;
+import org.keycloak.models.sessions.infinispan.query.ClientSessionQueries;
+import org.keycloak.models.sessions.infinispan.query.UserSessionQueries;
+import org.keycloak.models.sessions.infinispan.remote.RemoteInfinispanAuthenticationSessionProviderFactory;
+import org.keycloak.models.sessions.infinispan.remote.RemoteUserLoginFailureProviderFactory;
 import org.keycloak.quarkus.runtime.configuration.Configuration;
 
 import javax.net.ssl.SSLContext;
@@ -245,12 +247,22 @@ public class CacheManagerFactory {
         var newPS = KeycloakModelSchema.parseProtoSchema(newSchema);
         var admin = remoteCacheManager.administration();
 
-        if (isEntityChanged(oldPS, newPS, Marshalling.protoEntity(LoginFailureEntity.class))) {
+        if (isEntityChanged(oldPS, newPS, RemoteUserLoginFailureProviderFactory.PROTO_ENTITY)) {
             updateSchemaAndReIndexCache(admin, LOGIN_FAILURE_CACHE_NAME);
         }
 
-        if (isEntityChanged(oldPS, newPS, Marshalling.protoEntity(RootAuthenticationSessionAdapter.class))) {
+        if (isEntityChanged(oldPS, newPS, RemoteInfinispanAuthenticationSessionProviderFactory.PROTO_ENTITY)) {
             updateSchemaAndReIndexCache(admin, AUTHENTICATION_SESSIONS_CACHE_NAME);
+        }
+
+        if (isEntityChanged(oldPS, newPS, ClientSessionQueries.CLIENT_SESSION)) {
+            updateSchemaAndReIndexCache(admin, CLIENT_SESSION_CACHE_NAME);
+            updateSchemaAndReIndexCache(admin, OFFLINE_CLIENT_SESSION_CACHE_NAME);
+        }
+
+        if (isEntityChanged(oldPS, newPS, UserSessionQueries.USER_SESSION)) {
+            updateSchemaAndReIndexCache(admin, USER_SESSION_CACHE_NAME);
+            updateSchemaAndReIndexCache(admin, OFFLINE_USER_SESSION_CACHE_NAME);
         }
     }
 
@@ -286,15 +298,9 @@ public class CacheManagerFactory {
             // remove all distributed caches
             logger.debug("Removing all distributed caches.");
             for (String cacheName : CLUSTERED_CACHE_NAMES) {
-               var remoteStore = builders.get(cacheName)
-                     .persistence()
-                     .stores()
-                     .stream()
-                     .filter(RemoteStoreConfigurationBuilder.class::isInstance)
-                     .findFirst();
-
-               if (remoteStore.isPresent())
-                  logger.warnf("remote-store configuration detected for cache '%s'. Explicit cache configuration ignored when using '%s' or '%s' Features.", cacheName, Profile.Feature.REMOTE_CACHE.getKey(), Profile.Feature.MULTI_SITE.getKey());
+               if (hasRemoteStore(builders.get(cacheName))) {
+                   logger.warnf("remote-store configuration detected for cache '%s'. Explicit cache configuration ignored when using '%s' or '%s' Features.", cacheName, Profile.Feature.REMOTE_CACHE.getKey(), Profile.Feature.MULTI_SITE.getKey());
+               }
                builders.remove(cacheName);
             }
             // Disable JGroups, not required when the data is stored in the Remote Cache.
@@ -308,6 +314,8 @@ public class CacheManagerFactory {
             }
             configureSessionsCaches(builder);
         }
+
+        checkForRemoteStores(builder);
 
         var start = isStartEagerly();
         return CompletableFuture.supplyAsync(() -> new DefaultCacheManager(builder, start));
@@ -442,6 +450,26 @@ public class CacheManagerFactory {
         }
     }
 
+    private static void checkForRemoteStores(ConfigurationBuilderHolder builder) {
+        if (Profile.isFeatureEnabled(Profile.Feature.REMOTE_STORE_CROSS_DC) && Profile.isFeatureEnabled(Profile.Feature.MULTI_SITE)) {
+            logger.fatalf("Feature %s is now deprecated.%nFor multi-site (cross-dc) support, enable only %s.",
+                    Profile.Feature.REMOTE_STORE_CROSS_DC.getKey(), Profile.Feature.MULTI_SITE.getKey());
+            throw new RuntimeException("The features " + Profile.Feature.REMOTE_STORE_CROSS_DC.getKey() + " and " + Profile.Feature.MULTI_SITE.getKey() + " must not be enabled at the same time.");
+        }
+        if (Profile.isFeatureEnabled(Profile.Feature.REMOTE_STORE_CROSS_DC) && Profile.isFeatureEnabled(Profile.Feature.REMOTE_CACHE)) {
+            logger.fatalf("Feature %s is now deprecated.%nFor multi-site (cross-dc) support, enable only %s.",
+                    Profile.Feature.REMOTE_STORE_CROSS_DC.getKey(), Profile.Feature.REMOTE_CACHE.getKey());
+            throw new RuntimeException("The features " + Profile.Feature.REMOTE_STORE_CROSS_DC.getKey() + " and " + Profile.Feature.REMOTE_CACHE.getKey() + " must not be enabled at the same time.");
+        }
+        if (!Profile.isFeatureEnabled(Profile.Feature.REMOTE_STORE_CROSS_DC)) {
+            if (builder.getNamedConfigurationBuilders().values().stream().anyMatch(CacheManagerFactory::hasRemoteStore)) {
+                logger.fatalf("Remote stores are not supported for embedded caches as feature %s is not enabled. This feature is disabled by default as it is now deprecated.%nFor keeping user sessions across restarts, use feature %s which is enabled by default.%nFor multi-site (cross-dc) support, enable %s.",
+                        Profile.Feature.REMOTE_STORE_CROSS_DC.getKey(), Profile.Feature.PERSISTENT_USER_SESSIONS.getKey(), Profile.Feature.MULTI_SITE.getKey());
+                throw new RuntimeException("Remote store is not supported as feature " + Profile.Feature.REMOTE_STORE_CROSS_DC.getKey() + " is not enabled.");
+            }
+        }
+    }
+
     private static void configureSessionsCaches(ConfigurationBuilderHolder builder) {
         Stream.of(USER_SESSION_CACHE_NAME, CLIENT_SESSION_CACHE_NAME, OFFLINE_USER_SESSION_CACHE_NAME, OFFLINE_CLIENT_SESSION_CACHE_NAME)
                 .forEach(cacheName -> {
@@ -474,5 +502,9 @@ public class CacheManagerFactory {
 
     private static String requiredStringProperty(String propertyName) {
         return Configuration.getOptionalKcValue(propertyName).orElseThrow(() -> new RuntimeException("Property " + propertyName + " required but not specified"));
+    }
+
+    private static boolean hasRemoteStore(ConfigurationBuilder builder) {
+        return builder.persistence().stores().stream().anyMatch(RemoteStoreConfigurationBuilder.class::isInstance);
     }
 }

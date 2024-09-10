@@ -1,6 +1,9 @@
 <#import "template.ftl" as layout>
 <#import "field.ftl" as field>
+<#import "buttons.ftl" as buttons>
 <@layout.registrationLayout displayMessage=!messagesPerField.existsError('username','password') displayInfo=realm.password && realm.registrationAllowed && !registrationDisabled??; section>
+<!-- template: login.ftl -->
+
     <#if section = "header">
         ${msg("loginAccountTitle")}
     <#elseif section = "form">
@@ -23,15 +26,12 @@
                         </#if>
                     </div>
 
-                    <div id="kc-form-buttons" class="${properties.kcFormGroupClass!}">
-                        <input type="hidden" id="id-hidden-input" name="credentialId" <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if>/>
-                        <input tabindex="4" class="pf-v5-c-button pf-m-primary pf-m-block" name="login" id="kc-login" type="submit" value="${msg("doLogIn")}"/>
-                    </div>
+                    <input type="hidden" id="id-hidden-input" name="credentialId" <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if>/>
+                    <@buttons.loginButton />
                 </form>
             </#if>
             </div>
         </div>
-        <script type="module" src="${url.resourcesPath}/js/passwordVisibility.js"></script>
     <#elseif section = "info" >
         <#if realm.password && realm.registrationAllowed && !registrationDisabled??>
             <div id="kc-registration-container" class="${properties.kcLoginFooterBand!}">

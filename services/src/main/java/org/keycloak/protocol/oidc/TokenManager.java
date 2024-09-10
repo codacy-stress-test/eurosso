@@ -20,6 +20,7 @@ package org.keycloak.protocol.oidc;
 import java.util.Collections;
 import java.util.HashMap;
 import org.jboss.logging.Logger;
+import org.keycloak.broker.oidc.OIDCIdentityProviderConfig;
 import org.keycloak.common.Profile.Feature;
 import org.keycloak.http.HttpRequest;
 import org.keycloak.OAuth2Constants;
@@ -98,6 +99,7 @@ import org.keycloak.util.TokenUtil;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -437,6 +439,8 @@ public class TokenManager {
             responseBuilder.generateIDToken().generateAccessTokenHash();
         }
 
+        storeRefreshTimingInformation(event, refreshToken, validation.newToken);
+
         return responseBuilder;
     }
 
@@ -453,6 +457,16 @@ public class TokenManager {
 
             return null;
         };
+    }
+
+    /**
+     * Store information to identify early token refreshes of clients which stress the IAM system.
+     */
+    private void storeRefreshTimingInformation(EventBuilder event, RefreshToken refreshToken, AccessToken newToken) {
+        long expirationAccessToken = newToken.getExp() - newToken.getIat();
+        long ageOfRefreshToken = newToken.getIat() - refreshToken.getIat();
+        event.detail(Details.ACCESS_TOKEN_EXPIRATION_TIME, Long.toString(expirationAccessToken));
+        event.detail(Details.AGE_OF_REFRESH_TOKEN, Long.toString(ageOfRefreshToken));
     }
 
     private void validateTokenReuseForRefresh(KeycloakSession session, RealmModel realm, RefreshToken refreshToken,
@@ -1440,45 +1454,45 @@ public class TokenManager {
         }
     }
 
-    public LogoutTokenValidationCode verifyLogoutToken(KeycloakSession session, RealmModel realm, String encodedLogoutToken) {
+    public LogoutTokenValidationContext verifyLogoutToken(KeycloakSession session, String encodedLogoutToken) {
         Optional<LogoutToken> logoutTokenOptional = toLogoutToken(encodedLogoutToken);
-        if (!logoutTokenOptional.isPresent()) {
-            return LogoutTokenValidationCode.DECODE_TOKEN_FAILED;
+        if (logoutTokenOptional.isEmpty()) {
+            return LogoutTokenValidationCode.DECODE_TOKEN_FAILED.toCtx();
         }
 
         LogoutToken logoutToken = logoutTokenOptional.get();
-        List<OIDCIdentityProvider> identityProviders = getOIDCIdentityProviders(realm, session).toList();
+        List<OIDCIdentityProvider> identityProviders = getOIDCIdentityProviders(logoutToken, session).toList();
         if (identityProviders.isEmpty()) {
-            return LogoutTokenValidationCode.COULD_NOT_FIND_IDP;
+            return LogoutTokenValidationCode.COULD_NOT_FIND_IDP.toCtx();
         }
 
-        Stream<OIDCIdentityProvider> validOidcIdentityProviders =
-                validateLogoutTokenAgainstIdpProvider(identityProviders.stream(), encodedLogoutToken, logoutToken);
-        if (validOidcIdentityProviders.count() == 0) {
-            return LogoutTokenValidationCode.TOKEN_VERIFICATION_WITH_IDP_FAILED;
+        List<OIDCIdentityProvider> validOidcIdentityProviders =
+                validateLogoutTokenAgainstIdpProvider(identityProviders.stream(), encodedLogoutToken).toList();
+        if (validOidcIdentityProviders.isEmpty()) {
+            return LogoutTokenValidationCode.TOKEN_VERIFICATION_WITH_IDP_FAILED.toCtx();
         }
 
         if (logoutToken.getSubject() == null && logoutToken.getSid() == null) {
-            return LogoutTokenValidationCode.MISSING_SID_OR_SUBJECT;
+            return LogoutTokenValidationCode.MISSING_SID_OR_SUBJECT.toCtx();
         }
 
         if (!checkLogoutTokenForEvents(logoutToken)) {
-            return LogoutTokenValidationCode.BACKCHANNEL_LOGOUT_EVENT_MISSING;
+            return LogoutTokenValidationCode.BACKCHANNEL_LOGOUT_EVENT_MISSING.toCtx();
         }
 
         if (logoutToken.getOtherClaims().get(NONCE) != null) {
-            return LogoutTokenValidationCode.NONCE_CLAIM_IN_TOKEN;
+            return LogoutTokenValidationCode.NONCE_CLAIM_IN_TOKEN.toCtx();
         }
 
         if (logoutToken.getId() == null) {
-            return LogoutTokenValidationCode.LOGOUT_TOKEN_ID_MISSING;
+            return LogoutTokenValidationCode.LOGOUT_TOKEN_ID_MISSING.toCtx();
         }
 
         if (logoutToken.getIat() == null) {
-            return LogoutTokenValidationCode.MISSING_IAT_CLAIM;
+            return LogoutTokenValidationCode.MISSING_IAT_CLAIM.toCtx();
         }
 
-        return LogoutTokenValidationCode.VALIDATION_SUCCESS;
+        return new LogoutTokenValidationContext(LogoutTokenValidationCode.VALIDATION_SUCCESS, logoutToken, validOidcIdentityProviders);
     }
 
     public Optional<LogoutToken> toLogoutToken(String encodedLogoutToken) {
@@ -1491,15 +1505,8 @@ public class TokenManager {
     }
 
 
-    public Stream<OIDCIdentityProvider> getValidOIDCIdentityProvidersForBackchannelLogout(RealmModel realm, KeycloakSession session, String encodedLogoutToken, LogoutToken logoutToken) {
-        return validateLogoutTokenAgainstIdpProvider(getOIDCIdentityProviders(realm, session), encodedLogoutToken, logoutToken);
-    }
-
-
-    public Stream<OIDCIdentityProvider> validateLogoutTokenAgainstIdpProvider(Stream<OIDCIdentityProvider> oidcIdps, String encodedLogoutToken, LogoutToken logoutToken) {
+    public Stream<OIDCIdentityProvider> validateLogoutTokenAgainstIdpProvider(Stream<OIDCIdentityProvider> oidcIdps, String encodedLogoutToken) {
             return oidcIdps
-                    .filter(oidcIdp -> oidcIdp.getConfig().getIssuer() != null)
-                    .filter(oidcIdp -> oidcIdp.isIssuer(logoutToken.getIssuer(), null))
                     .filter(oidcIdp -> {
                         try {
                             oidcIdp.validateToken(encodedLogoutToken);
@@ -1511,13 +1518,22 @@ public class TokenManager {
                     });
     }
 
-    private Stream<OIDCIdentityProvider> getOIDCIdentityProviders(RealmModel realm, KeycloakSession session) {
+    private Stream<OIDCIdentityProvider> getOIDCIdentityProviders(LogoutToken logoutToken, KeycloakSession session) {
         try {
-            return session.identityProviders().getAllStream()
-                    .map(idpModel ->
-                        IdentityBrokerService.getIdentityProviderFactory(session, idpModel).create(session, idpModel))
-                    .filter(OIDCIdentityProvider.class::isInstance)
-                    .map(OIDCIdentityProvider.class::cast);
+            return session.identityProviders()
+                    .getAllStream(Map.of(
+                            OIDCIdentityProviderConfig.ISSUER, logoutToken.getIssuer()
+                    ), -1, -1)
+                    .map(model -> {
+                        var idp = IdentityBrokerService.getIdentityProviderFactory(session, model).create(session, model);
+
+                        if (idp instanceof OIDCIdentityProvider oidcIdp) {
+                            return oidcIdp;
+                        }
+
+                        return null;
+                    })
+                    .filter(Objects::nonNull);
         } catch (IdentityBrokerException e) {
             logger.warnf("LogoutToken verification with identity provider failed", e.getMessage());
         }
