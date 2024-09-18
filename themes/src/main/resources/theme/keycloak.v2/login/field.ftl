@@ -14,6 +14,7 @@
 
   <#nested>
 
+  <div id="input-error-client-${name}"></div>
   <#if error?has_content>
     <div class="${properties.kcFormHelperTextClass}" aria-live="polite">
       <div class="${properties.kcInputHelperTextClass}">
@@ -41,24 +42,24 @@
   </#if>
 </#macro>
 
-<#macro input name label value="" required=false>
-  <#assign error=kcSanitize(messagesPerField.get(name))?no_esc>
+<#macro input name label value="" required=false autocomplete="off" fieldName=name autofocus=false>
+  <#assign error=kcSanitize(messagesPerField.get(fieldName))?no_esc>
   <@field.group name=name label=label error=error required=required>
     <span class="${properties.kcInputClass} <#if error?has_content>${properties.kcError}</#if>">
-        <input id="${name}" name="${name}" value="${value}" type="text" autocomplete="off"
+        <input id="${name}" name="${name}" value="${value}" type="text" autocomplete="${autocomplete}" <#if autofocus>autofocus</#if>
                 aria-invalid="<#if error?has_content>true</#if>"/>
         <@errorIcon error=error/>
     </span>
   </@field.group>
 </#macro>
 
-<#macro password name label value="" required=false forgotPassword=false>
-  <#assign error=kcSanitize(messagesPerField.get(name))?no_esc>
+<#macro password name label value="" required=false forgotPassword=false fieldName=name autocomplete="off" autofocus=false>
+  <#assign error=kcSanitize(messagesPerField.get(fieldName))?no_esc>
   <@field.group name=name label=label error=error required=required>
     <div class="${properties.kcInputGroup}">
       <div class="${properties.kcInputGroupItemClass} ${properties.kcFill}">
         <span class="${properties.kcInputClass} <#if error?has_content>${properties.kcError}</#if>">
-          <input id="${name}" name="${name}" value="${value}" type="password" autocomplete="off"
+          <input id="${name}" name="${name}" value="${value}" type="password" autocomplete="${autocomplete}" <#if autofocus>autofocus</#if>
                   aria-invalid="<#if error?has_content>true</#if>"/>
           <@errorIcon error=error/>
         </span>
@@ -77,7 +78,7 @@
             <div class="${properties.kcInputHelperTextClass}">
                 <div class="${properties.kcInputHelperTextItemClass}">
                     <span class="${properties.kcInputHelperTextItemTextClass}">
-                        <a tabindex="3" href="${url.loginResetCredentialsUrl}">${msg("doForgotPassword")}</a>
+                        <a href="${url.loginResetCredentialsUrl}">${msg("doForgotPassword")}</a>
                     </span>
                 </div>
             </div>

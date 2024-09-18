@@ -17,7 +17,7 @@
                                 <#assign label>
                                     <#if !realm.loginWithEmailAllowed>${msg("username")}<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")}<#else>${msg("email")}</#if>
                                 </#assign>
-                                <@field.input name="username" label=label value="${(login.username!'')}" />
+                                <@field.input name="username" label=label value=login.username!'' autofocus=true autocomplete="username" />
 
                                 <#if messagesPerField.existsError('username')>
                                     <span id="input-error-username" class="${properties.kcInputErrorMessageClass!}" aria-live="polite">
@@ -42,7 +42,7 @@
     <#elseif section = "info" >
         <#if realm.password && realm.registrationAllowed && !registrationDisabled??>
             <div id="kc-registration">
-                <span>${msg("noAccount")} <a tabindex="6" href="${url.registrationUrl}">${msg("doRegister")}</a></span>
+                <span>${msg("noAccount")} <a href="${url.registrationUrl}">${msg("doRegister")}</a></span>
             </div>
         </#if>
     <#elseif section = "socialProviders" >

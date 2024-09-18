@@ -48,6 +48,21 @@
         checkCookiesAndSetTimer(
             "${url.ssoLoginInOtherTabsUrl?no_esc}"
         );
+
+        const DARK_MODE_CLASS = "pf-v5-theme-dark";
+        const mediaQuery =window.matchMedia("(prefers-color-scheme: dark)");
+        updateDarkMode(mediaQuery.matches);
+        mediaQuery.addEventListener("change", (event) =>
+          updateDarkMode(event.matches),
+        );
+        function updateDarkMode(isEnabled) {
+          const { classList } = document.documentElement;
+          if (isEnabled) {
+            classList.add(DARK_MODE_CLASS);
+          } else {
+            classList.remove(DARK_MODE_CLASS);
+          }
+        }
     </script>
 </head>
 
@@ -158,7 +173,7 @@
                     <#if message.type = 'error'><span class="${properties.kcFeedbackErrorIcon!}"></span></#if>
                     <#if message.type = 'info'><span class="${properties.kcFeedbackInfoIcon!}"></span></#if>
                 </div>
-                    <span class="${properties.kcAlertTitleClass!} kc-feedback-text">${kcSanitize(message.summary)?no_esc}</span>
+                <span class="${properties.kcAlertTitleClass!} kc-feedback-text">${kcSanitize(message.summary)?no_esc}</span>
             </div>
         </#if>
 
@@ -166,11 +181,11 @@
 
         <#if auth?has_content && auth.showTryAnotherWayLink()>
           <form id="kc-select-try-another-way-form" action="${url.loginAction}" method="post" novalidate="novalidate">
-              <div class="${properties.kcFormGroupClass!}">
-                  <input type="hidden" name="tryAnotherWay" value="on"/>
-                  <a href="#" id="try-another-way"
-                      onclick="document.forms['kc-select-try-another-way-form'].submit();return false;">${msg("doTryAnotherWay")}</a>
-              </div>
+              <input type="hidden" name="tryAnotherWay" value="on"/>
+              <a id="try-another-way" href="javascript:document.forms['kc-select-try-another-way-form'].submit()"
+                  class="${properties.kcButtonSecondaryClass} ${properties.kcButtonBlockClass} ${properties.kcMarginTopClass}">
+                    ${kcSanitize(msg("doTryAnotherWay"))?no_esc}
+              </a>
           </form>
         </#if>
 
@@ -182,9 +197,9 @@
           </div>
         </#if>
       </div>
-      <footer class="pf-v5-c-login__main-footer">
+      <div class="pf-v5-c-login__main-footer">
         <#nested "socialProviders">
-      </footer>
+      </div>
     </main>
   </div>
 </div>
