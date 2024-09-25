@@ -12,6 +12,7 @@ import {
   Switch,
   ToolbarItem,
 } from "@patternfly/react-core";
+import { sortBy } from "lodash-es";
 import { BellIcon } from "@patternfly/react-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -42,10 +43,7 @@ const ShownOnLoginPageCheck = ({
         { alias: row.alias! },
         {
           ...row,
-          config: {
-            ...row.config,
-            "kc.org.broker.public": `${value}`,
-          },
+          hideOnLogin: value,
         },
       );
       addAlert(t("linkUpdatedSuccessful"));
@@ -60,7 +58,7 @@ const ShownOnLoginPageCheck = ({
     <Switch
       label={t("on")}
       labelOff={t("off")}
-      isChecked={row.config?.["kc.org.broker.public"] === "true"}
+      isChecked={row.hideOnLogin}
       onChange={(_, value) => toggle(value)}
     />
   );
@@ -89,8 +87,12 @@ export const IdentityProviders = () => {
     [],
   );
 
-  const loader = () =>
-    adminClient.organizations.listIdentityProviders({ orgId: orgId! });
+  const loader = async () => {
+    const providers = await adminClient.organizations.listIdentityProviders({
+      orgId: orgId!,
+    });
+    return sortBy(providers, "alias");
+  };
 
   const [toggleUnlinkDialog, UnlinkConfirm] = useConfirmDialog({
     titleKey: "identityProviderUnlink",
@@ -199,8 +201,8 @@ export const IdentityProviders = () => {
                 displayKey: "providerDetails",
               },
               {
-                name: "config['kc.org.broker.public']",
-                displayKey: "shownOnLoginPage",
+                name: "hideOnLogin",
+                displayKey: "hideOnLoginPage",
                 cellRenderer: (row) => (
                   <ShownOnLoginPageCheck row={row} refresh={refresh} />
                 ),

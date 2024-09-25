@@ -17,7 +17,6 @@
 
 package org.keycloak.organization.jpa;
 
-import static org.keycloak.models.OrganizationModel.BROKER_PUBLIC;
 import static org.keycloak.models.OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE;
 import static org.keycloak.models.jpa.PaginationUtils.paginateQuery;
 import static org.keycloak.utils.StreamsUtil.closing;
@@ -103,7 +102,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         OrganizationAdapter adapter = new OrganizationAdapter(session, realm, this);
 
         try {
-            session.setAttribute(OrganizationModel.class.getName(), adapter);
+            session.getContext().setOrganization(adapter);
             GroupModel group = createOrganizationGroup(adapter.getId());
 
             adapter.setGroupId(group.getId());
@@ -113,7 +112,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
             em.persist(adapter.getEntity());
         } finally {
-            session.removeAttribute(OrganizationModel.class.getName());
+            session.getContext().setOrganization(null);
         }
 
         return adapter;
@@ -124,7 +123,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         OrganizationEntity entity = getEntity(organization.getId());
 
         try {
-            session.setAttribute(OrganizationModel.class.getName(), organization);
+            session.getContext().setOrganization(organization);
             RealmModel realm = session.realms().getRealm(getRealm().getId());
 
             // check if the realm is being removed so that we don't need to remove manually remove any other data but the org
@@ -143,7 +142,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
             em.remove(entity);
         } finally {
-            session.removeAttribute(OrganizationModel.class.getName());
+            session.getContext().setOrganization(null);
         }
 
         return true;
@@ -178,7 +177,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         }
 
         if (current == null) {
-            session.setAttribute(OrganizationModel.class.getName(), organization);
+            session.getContext().setOrganization(organization);
         }
 
         try {
@@ -191,7 +190,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             user.joinGroup(group, metadata);
         } finally {
             if (current == null) {
-                session.removeAttribute(OrganizationModel.class.getName());
+                session.getContext().setOrganization(null);
             }
         }
 
@@ -367,7 +366,6 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         // clear the organization id and any domain assigned to the IDP.
         identityProvider.setOrganizationId(null);
         identityProvider.getConfig().remove(ORGANIZATION_DOMAIN_ATTRIBUTE);
-        identityProvider.getConfig().remove(BROKER_PUBLIC);
         session.identityProviders().update(identityProvider);
 
         return true;
@@ -417,14 +415,14 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             OrganizationModel current = Organizations.resolveOrganization(session);
 
             if (current == null) {
-                session.setAttribute(OrganizationModel.class.getName(), organization);
+                session.getContext().setOrganization(organization);
             }
 
             try {
                 member.leaveGroup(getOrganizationGroup(organization));
             } finally {
                 if (current == null) {
-                    session.removeAttribute(OrganizationModel.class.getName());
+                    session.getContext().setOrganization(null);
                 }
             }
         }
