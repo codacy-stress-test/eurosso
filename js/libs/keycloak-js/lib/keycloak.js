@@ -52,6 +52,14 @@ function Keycloak (config) {
     var logInfo = createLogger(console.info);
     var logWarn = createLogger(console.warn);
 
+    if (!globalThis.isSecureContext) {
+        logWarn(
+            "[KEYCLOAK] Keycloak JS must be used in a 'secure context' to function properly as it relies on browser APIs that are otherwise not available.\n" +
+            "Continuing to run your application insecurely will lead to unexpected behavior and breakage.\n\n" +
+            "For more information see: https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts"
+        );
+    }
+
     kc.init = function (initOptions) {
         if (kc.didInitialize) {
             throw new Error("A 'Keycloak' instance can only be initialized once.");
@@ -333,21 +341,11 @@ function Keycloak (config) {
     }
 
     function generateRandomData(len) {
-        // use web crypto APIs if possible
-        var array = null;
-        var crypto = window.crypto || window.msCrypto;
-        if (crypto && crypto.getRandomValues && window.Uint8Array) {
-            array = new Uint8Array(len);
-            crypto.getRandomValues(array);
-            return array;
+        if (typeof crypto === "undefined" || typeof crypto.getRandomValues === "undefined") {
+            throw new Error("Web Crypto API is not available.");
         }
 
-        // fallback to Math random
-        array = new Array(len);
-        for (var j = 0; j < array.length; j++) {
-            array[j] = Math.floor(256 * Math.random());
-        }
-        return array;
+        return crypto.getRandomValues(new Uint8Array(len));
     }
 
     function generateCodeVerifier(len) {
@@ -465,14 +463,16 @@ function Keycloak (config) {
         }
 
         if (kc.pkceMethod) {
-            if (!globalThis.isSecureContext) {
-                logWarn('[KEYCLOAK] PKCE is only supported in secure contexts (HTTPS)');
-            } else {
-                var codeVerifier = generateCodeVerifier(96);
+            try {
+                const codeVerifier = generateCodeVerifier(96);
+                const pkceChallenge = await generatePkceChallenge(kc.pkceMethod, codeVerifier);
+
                 callbackState.pkceCodeVerifier = codeVerifier;
-                var pkceChallenge = await generatePkceChallenge(kc.pkceMethod, codeVerifier);
+
                 url += '&code_challenge=' + pkceChallenge;
                 url += '&code_challenge_method=' + kc.pkceMethod;
+            } catch (error) {
+                throw new Error("Failed to generate PKCE challenge.", { cause: error });
             }
         }
 
@@ -1009,13 +1009,11 @@ function Keycloak (config) {
     }
 
     function createUUID() {
-        var hexDigits = '0123456789abcdef';
-        var s = generateRandomString(36, hexDigits).split("");
-        s[14] = '4';
-        s[19] = hexDigits.substr((s[19] & 0x3) | 0x8, 1);
-        s[8] = s[13] = s[18] = s[23] = '-';
-        var uuid = s.join('');
-        return uuid;
+        if (typeof crypto === "undefined" || typeof crypto.randomUUID === "undefined") {
+            throw new Error("Web Crypto API is not available.");
+        }
+
+        return crypto.randomUUID();
     }
 
     function parseCallback(url) {
@@ -1331,8 +1329,8 @@ function Keycloak (config) {
                     throw new Error("Logout failed, request returned an error code.");
                 },
 
-                register: function(options) {
-                    window.location.assign(kc.createRegisterUrl(options));
+                register: async function(options) {
+                    window.location.assign(await kc.createRegisterUrl(options));
                     return createPromise().promise;
                 },
 
@@ -1488,9 +1486,9 @@ function Keycloak (config) {
                     return promise.promise;
                 },
 
-                register : function(options) {
+                register : async function(options) {
                     var promise = createPromise();
-                    var registerUrl = kc.createRegisterUrl();
+                    var registerUrl = await kc.createRegisterUrl();
                     var cordovaOptions = createCordovaOptions(options);
                     var ref = cordovaOpenWindowWrapper(registerUrl, '_blank', cordovaOptions);
                     ref.addEventListener('loadstart', function(event) {
@@ -1557,9 +1555,9 @@ function Keycloak (config) {
                     return promise.promise;
                 },
 
-                register : function(options) {
+                register : async function(options) {
                     var promise = createPromise();
-                    var registerUrl = kc.createRegisterUrl(options);
+                    var registerUrl = await kc.createRegisterUrl(options);
                     universalLinks.subscribe('keycloak' , function(event) {
                         universalLinks.unsubscribe('keycloak');
                         window.cordova.plugins.browsertab.close();
@@ -1741,8 +1739,12 @@ function bytesToBase64(bytes) {
 async function sha256Digest(message) {
     const encoder = new TextEncoder();
     const data = encoder.encode(message);
-    const hash = await crypto.subtle.digest("SHA-256", data);
-    return hash;
+
+    if (typeof crypto === "undefined" || typeof crypto.subtle === "undefined") {
+        throw new Error("Web Crypto API is not available.");
+    }
+
+    return await crypto.subtle.digest("SHA-256", data);
 }
 
 /**
