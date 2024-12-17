@@ -63,6 +63,13 @@ public interface RealmModel extends RoleContainerModel {
         KeycloakSession getKeycloakSession();
     }
 
+    interface RealmAttributeUpdateEvent extends ProviderEvent {
+        RealmModel getRealm();
+        String getAttributeName();
+        String getAttributeValue();
+        KeycloakSession getKeycloakSession();
+    }
+
     @Override
     String getId();
 
@@ -109,6 +116,14 @@ public interface RealmModel extends RoleContainerModel {
     boolean isOrganizationsEnabled();
 
     void setOrganizationsEnabled(boolean organizationsEnabled);
+
+    boolean isAdminPermissionsEnabled();
+
+    void setAdminPermissionsEnabled(boolean adminPermissionsEnabled);
+
+    boolean isVerifiableCredentialsEnabled();
+
+    void setVerifiableCredentialsEnabled(boolean verifiableCredentialsEnabled);
 
     void setAttribute(String name, String value);
     default void setAttribute(String name, Boolean value) {
@@ -668,6 +683,10 @@ public interface RealmModel extends RoleContainerModel {
      * @param role to be set
      */
     void setDefaultRole(RoleModel role);
+
+    ClientModel getAdminPermissionsClient();
+
+    void setAdminPermissionsClient(ClientModel client);
 
     /**
      * @deprecated use {@link IdentityProviderStorageProvider#isIdentityFederationEnabled()} instead.

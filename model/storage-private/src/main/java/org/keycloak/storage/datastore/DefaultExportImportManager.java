@@ -288,6 +288,7 @@ public class DefaultExportImportManager implements ExportImportManager {
         if (rep.isResetPasswordAllowed() != null) newRealm.setResetPasswordAllowed(rep.isResetPasswordAllowed());
         if (rep.isEditUsernameAllowed() != null) newRealm.setEditUsernameAllowed(rep.isEditUsernameAllowed());
         if (rep.isOrganizationsEnabled() != null) newRealm.setOrganizationsEnabled(rep.isOrganizationsEnabled());
+        if (rep.isAdminPermissionsEnabled() != null) newRealm.setAdminPermissionsEnabled(rep.isAdminPermissionsEnabled());
         if (rep.getLoginTheme() != null) newRealm.setLoginTheme(rep.getLoginTheme());
         if (rep.getAccountTheme() != null) newRealm.setAccountTheme(rep.getAccountTheme());
         if (rep.getAdminTheme() != null) newRealm.setAdminTheme(rep.getAdminTheme());
@@ -459,6 +460,9 @@ public class DefaultExportImportManager implements ExportImportManager {
         if (rep.isInternationalizationEnabled() != null) {
             newRealm.setInternationalizationEnabled(rep.isInternationalizationEnabled());
         }
+        if (rep.isVerifiableCredentialsEnabled() != null) {
+            newRealm.setVerifiableCredentialsEnabled(rep.isVerifiableCredentialsEnabled());
+        }
         if (rep.getSupportedLocales() != null) {
             newRealm.setSupportedLocales(new HashSet<String>(rep.getSupportedLocales()));
         }
@@ -530,8 +534,13 @@ public class DefaultExportImportManager implements ExportImportManager {
     }
 
     private static Map<String, ClientModel> createClients(KeycloakSession session, RealmRepresentation rep, RealmModel realm, Map<String, String> mappedFlows) {
-        Map<String, ClientModel> appMap = new HashMap<String, ClientModel>();
+        Map<String, ClientModel> appMap = new HashMap<>();
         for (ClientRepresentation resourceRep : rep.getClients()) {
+            if (Profile.isFeatureEnabled(Feature.ADMIN_FINE_GRAINED_AUTHZ_V2)) {
+                if (realm.getAdminPermissionsClient() != null && realm.getAdminPermissionsClient().getClientId().equals(resourceRep.getClientId())) {
+                    continue; // admin-permission-client is already imported at this point
+                }
+            }
             ClientModel app = RepresentationToModel.createClient(session, realm, resourceRep, mappedFlows);
             String postLogoutRedirectUris = app.getAttribute(OIDCConfigAttributes.POST_LOGOUT_REDIRECT_URIS);
             if (postLogoutRedirectUris == null) {
@@ -771,6 +780,8 @@ public class DefaultExportImportManager implements ExportImportManager {
         if (rep.isResetPasswordAllowed() != null) realm.setResetPasswordAllowed(rep.isResetPasswordAllowed());
         if (rep.isEditUsernameAllowed() != null) realm.setEditUsernameAllowed(rep.isEditUsernameAllowed());
         if (rep.isOrganizationsEnabled() != null) realm.setOrganizationsEnabled(rep.isOrganizationsEnabled());
+        if (rep.isAdminPermissionsEnabled() != null) realm.setAdminPermissionsEnabled(rep.isAdminPermissionsEnabled());
+        if (rep.isVerifiableCredentialsEnabled() != null) realm.setVerifiableCredentialsEnabled(rep.isVerifiableCredentialsEnabled());
         if (rep.getSslRequired() != null) realm.setSslRequired(SslRequired.valueOf(rep.getSslRequired().toUpperCase()));
         if (rep.getAccessCodeLifespan() != null) realm.setAccessCodeLifespan(rep.getAccessCodeLifespan());
         if (rep.getAccessCodeLifespanUserAction() != null)

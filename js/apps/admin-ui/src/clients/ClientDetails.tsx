@@ -73,6 +73,7 @@ import { EvaluateScopes } from "./scopes/EvaluateScopes";
 import { ServiceAccount } from "./service-account/ServiceAccount";
 import { getProtocolName, isRealmClient } from "./utils";
 import { UserEvents } from "../events/UserEvents";
+import { useIsAdminPermissionsClient } from "../utils/useIsAdminPermissionsClient";
 
 type ClientDetailHeaderProps = {
   onChange: (value: boolean) => void;
@@ -191,7 +192,7 @@ export default function ClientDetails() {
 
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
-  const { realm } = useRealm();
+  const { realm, realmRepresentation } = useRealm();
   const { hasAccess } = useAccess();
   const isFeatureEnabled = useIsFeatureEnabled();
 
@@ -213,6 +214,8 @@ export default function ClientDetails() {
   const { clientId } = useParams<ClientParams>();
   const [key, setKey] = useState(0);
 
+  const isAdminPermissionsClient = useIsAdminPermissionsClient(clientId);
+
   const clientAuthenticatorType = useWatch({
     control: form.control,
     name: "clientAuthenticatorType",
@@ -226,55 +229,65 @@ export default function ClientDetails() {
     return sortBy(roles, (role) => role.name?.toUpperCase());
   };
 
-  const useTab = (tab: ClientTab) =>
-    useRoutableTab(
-      toClient({
-        realm,
-        clientId,
-        tab,
-      }),
-    );
+  const tab = (tab: ClientTab) =>
+    toClient({
+      realm,
+      clientId,
+      tab,
+    });
 
-  const settingsTab = useTab("settings");
-  const keysTab = useTab("keys");
-  const credentialsTab = useTab("credentials");
-  const rolesTab = useTab("roles");
-  const clientScopesTab = useTab("clientScopes");
-  const authorizationTab = useTab("authorization");
-  const serviceAccountTab = useTab("serviceAccount");
-  const sessionsTab = useTab("sessions");
-  const permissionsTab = useTab("permissions");
-  const advancedTab = useTab("advanced");
-  const userEventsTab = useTab("user-events");
+  const settingsTab = useRoutableTab(tab("settings"));
+  const keysTab = useRoutableTab(tab("keys"));
+  const credentialsTab = useRoutableTab(tab("credentials"));
+  const rolesTab = useRoutableTab(tab("roles"));
+  const clientScopesTab = useRoutableTab(tab("clientScopes"));
+  const authorizationTab = useRoutableTab(tab("authorization"));
+  const serviceAccountTab = useRoutableTab(tab("serviceAccount"));
+  const sessionsTab = useRoutableTab(tab("sessions"));
+  const permissionsTab = useRoutableTab(tab("permissions"));
+  const advancedTab = useRoutableTab(tab("advanced"));
+  const userEventsTab = useRoutableTab(tab("user-events"));
 
-  const useClientScopesTab = (tab: ClientScopesTab) =>
-    useRoutableTab(
-      toClientScopesTab({
-        realm,
-        clientId,
-        tab,
-      }),
-    );
+  const clientScopesTabRoute = (tab: ClientScopesTab) =>
+    toClientScopesTab({
+      realm,
+      clientId,
+      tab,
+    });
 
-  const clientScopesSetupTab = useClientScopesTab("setup");
-  const clientScopesEvaluateTab = useClientScopesTab("evaluate");
+  const clientScopesSetupTab = useRoutableTab(clientScopesTabRoute("setup"));
+  const clientScopesEvaluateTab = useRoutableTab(
+    clientScopesTabRoute("evaluate"),
+  );
 
-  const useAuthorizationTab = (tab: AuthorizationTab) =>
-    useRoutableTab(
-      toAuthorizationTab({
-        realm,
-        clientId,
-        tab,
-      }),
-    );
+  const authorizationTabRoute = (tab: AuthorizationTab) =>
+    toAuthorizationTab({
+      realm,
+      clientId,
+      tab,
+    });
 
-  const authorizationSettingsTab = useAuthorizationTab("settings");
-  const authorizationResourcesTab = useAuthorizationTab("resources");
-  const authorizationScopesTab = useAuthorizationTab("scopes");
-  const authorizationPoliciesTab = useAuthorizationTab("policies");
-  const authorizationPermissionsTab = useAuthorizationTab("permissions");
-  const authorizationEvaluateTab = useAuthorizationTab("evaluate");
-  const authorizationExportTab = useAuthorizationTab("export");
+  const authorizationSettingsTab = useRoutableTab(
+    authorizationTabRoute("settings"),
+  );
+  const authorizationResourcesTab = useRoutableTab(
+    authorizationTabRoute("resources"),
+  );
+  const authorizationScopesTab = useRoutableTab(
+    authorizationTabRoute("scopes"),
+  );
+  const authorizationPoliciesTab = useRoutableTab(
+    authorizationTabRoute("policies"),
+  );
+  const authorizationPermissionsTab = useRoutableTab(
+    authorizationTabRoute("permissions"),
+  );
+  const authorizationEvaluateTab = useRoutableTab(
+    authorizationTabRoute("evaluate"),
+  );
+  const authorizationExportTab = useRoutableTab(
+    authorizationTabRoute("export"),
+  );
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
     titleKey: "clientDeleteConfirmTitle",
@@ -537,6 +550,7 @@ export default function ClientDetails() {
               </Tab>
             )}
             {client!.authorizationServicesEnabled &&
+              !isAdminPermissionsClient &&
               (hasManageAuthorization || hasViewAuthorization) && (
                 <Tab
                   id="authorization"
@@ -665,10 +679,10 @@ export default function ClientDetails() {
             >
               <AdvancedTab save={save} client={client} />
             </Tab>
-            {hasAccess("view-events") && (
+            {hasAccess("view-events") && realmRepresentation?.eventsEnabled && (
               <Tab
                 data-testid="user-events-tab"
-                title={<TabTitleText>{t("userEvents")}</TabTitleText>}
+                title={<TabTitleText>{t("events")}</TabTitleText>}
                 {...userEventsTab}
               >
                 <UserEvents client={client.clientId} />

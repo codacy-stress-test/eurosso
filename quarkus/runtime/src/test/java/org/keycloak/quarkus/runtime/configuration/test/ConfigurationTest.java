@@ -36,6 +36,7 @@ import io.smallrye.config.SmallRyeConfig;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.dialect.PostgreSQLDialect;
 import io.smallrye.config.ConfigValue;
+import io.smallrye.config.Expressions;
 import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfigBuilder;
 import org.h2.Driver;
@@ -205,6 +206,14 @@ public class ConfigurationTest extends AbstractConfigurationTest {
         SmallRyeConfig config = createConfig();
         assertEquals(MariaDBDialect.class.getName(), config.getConfigValue("kc.db-dialect").getValue());
         assertEquals("jdbc:mariadb:aurora://foo/bar?a=1&b=2", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
+    }
+    
+    @Test
+    public void testExpansionDisabled() {
+        ConfigArgsConfigSource.setCliArgs("--db=mysql");
+        SmallRyeConfig config = createConfig();
+        String value = Expressions.withoutExpansion(() -> config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
+        assertEquals("jdbc:mysql://${kc.db-url-host:localhost}:${kc.db-url-port:3306}/${kc.db-url-database:keycloak}${kc.db-url-properties:}", value);
     }
 
     @Test
@@ -492,7 +501,7 @@ public class ConfigurationTest extends AbstractConfigurationTest {
         ConfigArgsConfigSource.setCliArgs("--https-certificates-reload-period=2h");
         assertEquals("2h", createConfig().getConfigValue("quarkus.http.ssl.certificate.reload-period").getValue());
     }
-    
+
     @Test
     public void testHttpsPaths() {
         ConfigArgsConfigSource.setCliArgs("--https-certificate-file=\\some\\file");
@@ -503,7 +512,7 @@ public class ConfigurationTest extends AbstractConfigurationTest {
         }
         assertEquals(expected, createConfig().getConfigValue("quarkus.http.ssl.certificate.files").getValue());
     }
-    
+
     @Test
     public void testCacheMaxCount() {
         int maxCount = 500;
@@ -523,5 +532,36 @@ public class ConfigurationTest extends AbstractConfigurationTest {
             String prop = "kc." + CachingOptions.cacheMaxCountProperty(cache);
             assertEquals(Integer.toString(maxCount), config.getConfigValue(prop).getValue());
         }
+    }
+
+    @Test
+    public void testWildcardCliOptionCanBeMappedToQuarkusOption() {
+        ConfigArgsConfigSource.setCliArgs("--log-level-org.keycloak=trace");
+        SmallRyeConfig config = createConfig();
+        assertEquals("TRACE", config.getConfigValue("quarkus.log.category.\"org.keycloak\".level").getValue());
+        assertEquals("INFO", config.getConfigValue("quarkus.log.category.\"io.quarkus\".level").getValue());
+        assertEquals("INFO", config.getConfigValue("quarkus.log.category.\"foo.bar\".level").getValue());
+    }
+
+    @Test
+    public void testWildcardEnvVarOptionCanBeMappedToQuarkusOption() {
+        putEnvVar("KC_LOG_LEVEL_IO_QUARKUS", "trace");
+        SmallRyeConfig config = createConfig();
+        assertEquals("INFO", config.getConfigValue("quarkus.log.category.\"org.keycloak\".level").getValue());
+        assertEquals("TRACE", config.getConfigValue("quarkus.log.category.\"io.quarkus\".level").getValue());
+        assertEquals("INFO", config.getConfigValue("quarkus.log.category.\"foo.bar\".level").getValue());
+    }
+
+    @Test
+    public void testWildcardOptionFromConfigFile() {
+        putEnvVar("SOME_CATEGORY_LOG_LEVEL", "debug");
+        SmallRyeConfig config = createConfig();
+        assertEquals("DEBUG", config.getConfigValue("quarkus.log.category.\"io.k8s\".level").getValue());
+    }
+
+    @Test
+    public void testWildcardPropertiesDontMatchEnvVarsFormat() {
+        SmallRyeConfig config = createConfig();
+        assertEquals("INFO", config.getConfigValue("quarkus.log.category.\"io.quarkus\".level").getValue());
     }
 }

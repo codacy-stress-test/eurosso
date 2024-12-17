@@ -140,6 +140,8 @@ public final class Constants {
      */
     public static final String STORAGE_BATCH_SIZE = "org.keycloak.storage.batch_size";
 
+    public static final String SNAPSHOT_VERSION = "999.0.0-SNAPSHOT";
+
     // Client Polices Realm Attributes Keys
     public static final String CLIENT_PROFILES = "client-policies.profiles";
     public static final String CLIENT_POLICIES = "client-policies.policies";
@@ -186,4 +188,6 @@ public final class Constants {
 
     //attribute name used to mark a temporary admin user/service account as temporary
     public static final String IS_TEMP_ADMIN_ATTR_NAME = "is_temporary_admin";
+
+    public static final String ADMIN_PERMISSIONS_CLIENT_ID = "admin-permissions";
 }

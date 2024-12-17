@@ -71,6 +71,7 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -84,6 +85,14 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.keycloak.authorization.AuthorizationProvider;
+import org.keycloak.authorization.model.ResourceServer;
+import org.keycloak.common.Profile;
+import org.keycloak.representations.idm.authorization.AdminPermissionsAuthorizationSchema;
+import org.keycloak.representations.idm.authorization.AuthorizationSchema;
+import org.keycloak.representations.idm.authorization.ResourceServerRepresentation;
+import org.keycloak.representations.idm.authorization.ResourceType;
+import org.keycloak.representations.idm.authorization.ScopeRepresentation;
 
 import static org.keycloak.utils.StreamsUtil.closing;
 
@@ -107,8 +116,63 @@ public final class KeycloakModelUtils {
     private KeycloakModelUtils() {
     }
 
+    /**
+     * Return an ID generated using the UUID java class.
+     * @return The ID using UUID.toString (36 chars)
+     */
     public static String generateId() {
         return UUID.randomUUID().toString();
+    }
+
+    /**
+     * Return an ID generated using the UUID class but using base64 URL encoding
+     * with the two longs (msb+lsb).
+     * @return The ID getting msb and lsb from UUID and encoding them in
+     * base64 URL without padding (22 chars)
+     */
+    public static String generateShortId() {
+        return generateShortId(UUID.randomUUID());
+    }
+
+    /**
+     * Generates a short ID representation for the UUID. The representation is the
+     * base64 url encoding of the msb+lsb of the UUID.
+     * @param uuid The UUID to represent
+     * @return The string representation in 22 characters
+     */
+    public static String generateShortId(final UUID uuid) {
+        final byte[] bytes = new byte[2 * Long.BYTES];
+        // first the msb
+        long l = uuid.getMostSignificantBits();
+        for (int i = Long.BYTES - 1; i >= 0; i--) {
+            bytes[i] = (byte) (l & 0xff);
+            l >>= 8;
+        }
+        // second the lsb
+        l = uuid.getLeastSignificantBits();
+        for (int i = Long.BYTES - 1; i >= 0; i--) {
+            bytes[Long.BYTES + i] = (byte) (l & 0xff);
+            l >>= 8;
+        }
+        // encode in base64 URL no padding (22 chars)
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /**
+     * Check if a string is a valid UUID.
+     * @param uuid The UUID string to verify
+     * @return true if the string is a valid uuid
+     */
+    public static boolean isValidUUID(String uuid) {
+        if (uuid == null) {
+            return false;
+        }
+        try {
+            UUID.fromString(uuid);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     public static PublicKey getPublicKey(String publicKeyPem) {
@@ -1126,6 +1190,30 @@ public final class KeycloakModelUtils {
             if (found == null) throw new RuntimeException("default group in realm rep doesn't exist: " + path);
             realm.addDefaultGroup(found);
         });
+    }
+
+    public static boolean isAdminPermissionsEnabled(RealmModel realm) {
+        return Profile.isFeatureEnabled(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ_V2) && realm.isAdminPermissionsEnabled();
+    }
+
+    public static void setupAdminPermissionsClient(KeycloakSession session, RealmModel realm) {
+        ClientModel client = session.clients().addClient(realm, Constants.ADMIN_PERMISSIONS_CLIENT_ID);
+        realm.setAdminPermissionsClient(client);
+
+        ResourceServer resourceServer = RepresentationToModel.createResourceServer(client, session, false);
+        ResourceServerRepresentation resourceServerRep = ModelToRepresentation.toRepresentation(resourceServer, client);
+
+        AuthorizationSchema schema = AdminPermissionsAuthorizationSchema.INSTANCE;
+
+        //there is no way how to map scopes to the resourceType, we need to collect all scopes from all resourceTypes 
+        Set<ScopeRepresentation> scopes = schema.getResourceTypes().stream()
+                .flatMap((resourceType) -> resourceType.getScopes().stream())
+                .map(scope -> new ScopeRepresentation(scope))
+                .collect(Collectors.toSet());//collecting to set to get rid of duplicities
+
+        resourceServerRep.setScopes(List.copyOf(scopes));
+
+        RepresentationToModel.toModel(resourceServerRep, session.getProvider(AuthorizationProvider.class), client);
     }
 
 }

@@ -62,10 +62,11 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+
+import static org.keycloak.protocol.oidc.par.endpoints.ParEndpoint.PAR_DPOP_PROOF_JKT;
 
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
@@ -185,6 +186,13 @@ public class AuthorizationEndpoint extends AuthorizationEndpointBase {
             return redirectErrorToClient(parsedResponseMode, ex.getError(), ex.getErrorDescription());
         }
 
+        // If DPoP Proof existed with PAR request, its public key needs to be matched with the one with Token Request afterward
+        String dpopJkt = session.getAttribute(PAR_DPOP_PROOF_JKT, String.class);
+        if (dpopJkt != null) {
+            // if dpop_jkt is specified in an authorization request sent to Authorization Endpoint, it is overwritten by one in PAR request
+            request.setDpopJkt(dpopJkt);
+        }
+
         try {
             session.clientPolicy().triggerOnEvent(new AuthorizationRequestContext(parsedResponseType, request, redirectUri, params));
         } catch (ClientPolicyException cpe) {
@@ -196,6 +204,16 @@ public class AuthorizationEndpoint extends AuthorizationEndpointBase {
 
         // So back button doesn't work
         CacheControlUtil.noBackButtonCacheControlHeader(session);
+
+        // Add support for Initiating User Registration via OpenID Connect 1.0 via prompt=create
+        // see: https://openid.net/specs/openid-connect-prompt-create-1_0.html#section-4.1
+        if (OIDCLoginProtocol.PROMPT_VALUE_CREATE.equals(params.getFirst(OAuth2Constants.PROMPT))) {
+            if (!Organizations.isRegistrationAllowed(session, realm)) {
+                throw new ErrorPageException(session, authenticationSession, Response.Status.BAD_REQUEST, Messages.REGISTRATION_NOT_ALLOWED);
+            }
+            return buildRegister();
+        }
+
         switch (action) {
             case REGISTER:
                 return buildRegister();
@@ -411,5 +429,6 @@ public class AuthorizationEndpoint extends AuthorizationEndpointBase {
         paramAction.accept(OIDCLoginProtocol.RESPONSE_MODE_PARAM, request.getResponseMode());
         paramAction.accept(OIDCLoginProtocol.SCOPE_PARAM, request.getScope());
         paramAction.accept(OIDCLoginProtocol.STATE_PARAM, request.getState());
+        paramAction.accept(OIDCLoginProtocol.DPOP_JKT, request.getDpopJkt());
     }
 }

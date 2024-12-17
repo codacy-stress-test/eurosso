@@ -30,12 +30,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import jakarta.ws.rs.DefaultValue;
-import org.eclipse.microprofile.openapi.annotations.Operation;
-import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
-import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -54,6 +51,9 @@ import jakarta.ws.rs.core.StreamingOutput;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.NoCache;
@@ -385,6 +385,7 @@ public class RealmAdminResource {
             rep.setDisplayName(realm.getDisplayName());
             rep.setDisplayNameHtml(realm.getDisplayNameHtml());
             rep.setSupportedLocales(realm.getSupportedLocalesStream().collect(Collectors.toSet()));
+            rep.setBruteForceProtected(realm.isBruteForceProtected());
 
             if (auth.users().canView()) {
                 rep.setRegistrationEmailAsUsername(realm.isRegistrationEmailAsUsername());
@@ -411,7 +412,7 @@ public class RealmAdminResource {
     public Response updateRealm(final RealmRepresentation rep) {
         auth.realm().requireManageRealm();
 
-        logger.debug("updating realm: " + realm.getName());
+        logger.debugf("updating realm: %s", realm.getName());
 
         if (Config.getAdminRealm().equals(realm.getName()) && (rep.getRealm() != null && !rep.getRealm().equals(Config.getAdminRealm()))) {
             throw ErrorResponse.error("Can't rename master realm", Status.BAD_REQUEST);
@@ -514,6 +515,7 @@ public class RealmAdminResource {
     @Tag(name = KeycloakOpenAPI.Admin.Tags.REALMS_ADMIN)
     @Operation()
     public ManagementPermissionReference getUserMgmtPermissions() {
+        ProfileHelper.requireFeature(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ);
         auth.realm().requireViewRealm();
 
         AdminPermissionManagement permissions = AdminPermissions.management(session, realm);
@@ -533,6 +535,7 @@ public class RealmAdminResource {
     @Tag(name = KeycloakOpenAPI.Admin.Tags.REALMS_ADMIN)
     @Operation()
     public ManagementPermissionReference setUsersManagementPermissionsEnabled(ManagementPermissionReference ref) {
+        ProfileHelper.requireFeature(Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ);
         auth.realm().requireManageRealm();
 
         AdminPermissionManagement permissions = AdminPermissions.management(session, realm);
@@ -544,8 +547,7 @@ public class RealmAdminResource {
         }
     }
 
-
-    public static ManagementPermissionReference toUsersMgmtRef(AdminPermissionManagement permissions) {
+    private ManagementPermissionReference toUsersMgmtRef(AdminPermissionManagement permissions) {
         ManagementPermissionReference ref = new ManagementPermissionReference();
         ref.setEnabled(true);
         ref.setResource(permissions.users().resource().getId());
@@ -745,7 +747,7 @@ public class RealmAdminResource {
     public void updateRealmEventsConfig(final RealmEventsConfigRepresentation rep) {
         auth.realm().requireManageEvents();
 
-        logger.debug("updating realm events config: " + realm.getName());
+        logger.debugf("updating realm events config: %s", realm.getName());
         new RealmManager(session).updateRealmEventsConfig(rep, realm);
         adminEvent.operation(OperationType.UPDATE).resource(ResourceType.REALM)
                 .resourcePath(session.getContext().getUri()).representation(rep)

@@ -29,7 +29,7 @@ import {
   WarningTriangleIcon,
 } from "@patternfly/react-icons";
 import type { IRowData } from "@patternfly/react-table";
-import { useState } from "react";
+import { JSX, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../../admin-client";
@@ -107,7 +107,7 @@ const ValidatedEmail = (user: UserRepresentation) => {
           <ExclamationCircleIcon className="keycloak__user-section__email-verified" />
         </Tooltip>
       )}{" "}
-      {emptyFormatter()(user.email)}
+      {emptyFormatter()(user.email) as JSX.Element}
     </>
   );
 };
@@ -157,12 +157,15 @@ export function UserDataTable() {
       first: first!,
       max: max!,
       q: query!,
-      exact: activeFilters.exact,
     };
 
     const searchParam = search || searchUser || "";
     if (searchParam) {
       params.search = searchParam;
+    }
+
+    if (activeFilters.exact) {
+      params.exact = true;
     }
 
     if (!listUsers && !(params.search || params.q)) {
@@ -200,7 +203,10 @@ export function UserDataTable() {
   });
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "deleteConfirmUsers",
+    titleKey: t("deleteConfirmUsers", {
+      count: selectedRows.length,
+      name: selectedRows[0]?.username,
+    }),
     messageKey: t("deleteConfirmDialog", { count: selectedRows.length }),
     continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,

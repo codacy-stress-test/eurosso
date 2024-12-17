@@ -1,6 +1,10 @@
 import ComponentRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentRepresentation";
 import ComponentTypeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentTypeRepresentation";
-import { useAlerts, useFetch } from "@keycloak/keycloak-ui-shared";
+import {
+  KeycloakSpinner,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
 import { ActionGroup, Button, Form, PageSection } from "@patternfly/react-core";
 import { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
@@ -10,7 +14,7 @@ import { useAdminClient } from "../admin-client";
 import { DynamicComponents } from "../components/dynamic/DynamicComponents";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useParams } from "../utils/useParams";
-import { type PAGE_PROVIDER, TAB_PROVIDER } from "./PageList";
+import { type PAGE_PROVIDER, TAB_PROVIDER } from "./constants";
 import { toPage } from "./routes";
 
 type PageHandlerProps = {
@@ -76,6 +80,9 @@ export const PageHandler = ({
     }
   };
 
+  if (!id) {
+    return <KeycloakSpinner />;
+  }
   return (
     <PageSection variant="light">
       <Form

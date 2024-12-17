@@ -1,16 +1,22 @@
 import type AdminEventRepresentation from "@keycloak/keycloak-admin-client/lib/defs/adminEventRepresentation";
 import {
+  Action,
+  KeycloakDataTable,
   KeycloakSelect,
+  ListEmptyState,
   SelectVariant,
   TextControl,
 } from "@keycloak/keycloak-ui-shared";
-import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import {
   ActionGroup,
   Button,
   Chip,
   ChipGroup,
   DatePicker,
+  DescriptionList,
+  DescriptionListDescription,
+  DescriptionListGroup,
+  DescriptionListTerm,
   Flex,
   FlexItem,
   Form,
@@ -29,14 +35,13 @@ import {
   Tr,
   cellWidth,
 } from "@patternfly/react-table";
+import CodeEditor from "@uiw/react-textarea-code-editor";
 import { pickBy } from "lodash-es";
 import { PropsWithChildren, useMemo, useState } from "react";
 import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../admin-client";
 import DropdownPanel from "../components/dropdown-panel/DropdownPanel";
-import { ListEmptyState } from "@keycloak/keycloak-ui-shared";
-import { Action, KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
 import { prettyPrintJSON } from "../util";
@@ -91,6 +96,24 @@ const DisplayDialog = ({
     </Modal>
   );
 };
+
+const DetailCell = (event: AdminEventRepresentation) => (
+  <DescriptionList isHorizontal className="keycloak_eventsection_details">
+    {event.details &&
+      Object.entries(event.details).map(([key, value]) => (
+        <DescriptionListGroup key={key}>
+          <DescriptionListTerm>{key}</DescriptionListTerm>
+          <DescriptionListDescription>{value}</DescriptionListDescription>
+        </DescriptionListGroup>
+      ))}
+    {event.error && (
+      <DescriptionListGroup key="error">
+        <DescriptionListTerm>error</DescriptionListTerm>
+        <DescriptionListDescription>{event.error}</DescriptionListDescription>
+      </DescriptionListGroup>
+    )}
+  </DescriptionList>
+);
 
 export const AdminEvents = () => {
   const { adminClient } = useAdminClient();
@@ -241,17 +264,24 @@ export const AdminEvents = () => {
           onClose={() => setRepresentationEvent(undefined)}
         >
           <CodeEditor
-            isLineNumbersVisible
-            isReadOnly
-            code={code}
-            language={Language.json}
-            height="8rem"
+            readOnly
+            value={code}
+            language="json"
+            style={{ height: "8rem", overflow: "scroll" }}
           />
         </DisplayDialog>
       )}
       <KeycloakDataTable
+        className="keycloak__events_table"
         key={key}
         loader={loader}
+        detailColumns={[
+          {
+            name: "details",
+            enabled: (event) => event.details !== undefined,
+            cellRenderer: DetailCell,
+          },
+        ]}
         isPaginated
         ariaLabelKey="adminEvents"
         toolbarItem={
@@ -412,7 +442,7 @@ export const AdminEvents = () => {
                     />
                     <TextControl name="authRealm" label={t("realm")} />
                     <TextControl name="authClient" label={t("client")} />
-                    <TextControl name="authUser" label={t("user")} />
+                    <TextControl name="authUser" label={t("userId")} />
                     <TextControl name="authIpAddress" label={t("ipAddress")} />
                     <FormGroup
                       label={t("dateFrom")}

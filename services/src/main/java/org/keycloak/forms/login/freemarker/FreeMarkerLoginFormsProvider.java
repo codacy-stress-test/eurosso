@@ -140,6 +140,8 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
 
     protected UserModel user;
 
+    protected String lang;
+
     protected final Map<String, Object> attributes = new HashMap<>();
     private Function<Map<String, Object>, Map<String, Object>> attributeMapper;
 
@@ -150,6 +152,7 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
         this.realm = session.getContext().getRealm();
         this.client = session.getContext().getClient();
         this.uriInfo = session.getContext().getUri();
+        this.lang = Locale.ENGLISH.toLanguageTag();
     }
 
     @SuppressWarnings("unchecked")
@@ -418,7 +421,10 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
         }
 
         try {
-            attributes.put("properties", theme.getProperties());
+            Properties properties = theme.getProperties();
+            attributes.put("properties", properties);
+            attributes.put("darkMode", "true".equals(properties.getProperty("darkMode"))
+                    && realm.getAttribute("darkMode", true));
         } catch (IOException e) {
             logger.warn("Failed to load properties", e);
         }
@@ -541,7 +547,10 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
                     b.queryParam(Constants.KEY, authenticationSession.getAuthNote(Constants.KEY));
                 }
 
-                attributes.put("locale", new LocaleBean(realm, locale, b, messagesBundle));
+                final var localeBean = new LocaleBean(realm, locale, b, messagesBundle);
+                attributes.put("locale", localeBean);
+
+                lang = localeBean.getCurrentLanguageTag();
             }
 
             if (Profile.isFeatureEnabled(Feature.ORGANIZATION)) {
@@ -561,6 +570,8 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
                 && !Boolean.TRUE.toString().equals(authenticationSession.getClientNote(Constants.KC_ACTION_ENFORCED))) {
             attributes.put("isAppInitiatedAction", true);
         }
+
+        attributes.put("lang", lang);
     }
 
     /**
@@ -574,6 +585,9 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
     protected Response processTemplate(Theme theme, String templateName, Locale locale) {
         try {
             Map<String, Object> attributes = Optional.ofNullable(attributeMapper).orElse(Function.identity()).apply(this.attributes);
+            if (!attributes.containsKey("templateName")) {
+                attributes.put("templateName", templateName);
+            }
             String result = freeMarker.processTemplate(attributes, templateName, theme);
             Response.ResponseBuilder builder = Response.status(status == null ? Response.Status.OK : status).type(MediaType.TEXT_HTML_UTF_8_TYPE).language(locale).entity(result);
             for (Map.Entry<String, String> entry : httpResponseHeaders.entrySet()) {
@@ -594,8 +608,6 @@ public class FreeMarkerLoginFormsProvider implements LoginFormsProvider {
     public Response createLoginUsername() {
         return createResponse(LoginFormsPages.LOGIN_USERNAME);
     }
-
-    ;
 
     public Response createLoginPassword() {
         return createResponse(LoginFormsPages.LOGIN_PASSWORD);

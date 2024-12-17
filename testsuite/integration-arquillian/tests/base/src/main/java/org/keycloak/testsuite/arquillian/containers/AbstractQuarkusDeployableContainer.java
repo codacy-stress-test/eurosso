@@ -179,12 +179,20 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
             commands.add("--http-management-port=" + configuration.getManagementPort());
         }
 
+        if (suiteContext.get().getMigrationContext().isRunningMigrationTest()) {
+            commands.add("--spi-datastore-legacy-allow-migrate-existing-database-to-snapshot=true");
+        }
+
         if (configuration.getRoute() != null) {
             commands.add("-Djboss.node.name=" + configuration.getRoute());
         }
 
         if (System.getProperty("auth.server.quarkus.log-level") != null) {
             commands.add("--log-level=" + System.getProperty("auth.server.quarkus.log-level"));
+        }
+
+        if (System.getProperty("auth.server.host") != null) {
+            commands.add("-Dauth.server.host=" + System.getProperty("auth.server.host"));
         }
 
         commands.addAll(getAdditionalBuildArgs());

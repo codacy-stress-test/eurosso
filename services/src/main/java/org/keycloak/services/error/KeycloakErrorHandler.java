@@ -12,6 +12,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionTaskWithResult;
 import org.keycloak.models.KeycloakTransaction;
 import org.keycloak.models.ModelDuplicateException;
+import org.keycloak.models.ModelException;
 import org.keycloak.models.ModelIllegalStateException;
 import org.keycloak.models.ModelValidationException;
 import org.keycloak.models.RealmModel;
@@ -90,7 +91,7 @@ public class KeycloakErrorHandler implements ExceptionMapper<Throwable> {
             OAuth2ErrorRepresentation error = new OAuth2ErrorRepresentation();
 
             error.setError(getErrorCode(throwable));
-            if (throwable instanceof ModelDuplicateException || throwable instanceof ModelValidationException) {
+            if (throwable.getCause() instanceof ModelException) {
                 error.setErrorDescription(throwable.getMessage());
             } else if (throwable instanceof JsonProcessingException || throwable.getCause() instanceof JsonProcessingException) {
                 error.setErrorDescription("Cannot parse the JSON");
@@ -183,17 +184,22 @@ public class KeycloakErrorHandler implements ExceptionMapper<Throwable> {
         Map<String, Object> attributes = new HashMap<>();
         Properties messagesBundle = theme.getMessages(locale);
 
+        final var localeBean =  new LocaleBean(realm, locale, session.getContext().getUri().getRequestUriBuilder(), messagesBundle);
+        final var lang = realm.isInternationalizationEnabled() ? localeBean.getCurrentLanguageTag() : Locale.ENGLISH.toLanguageTag();
+
         attributes.put("statusCode", responseStatus.getStatusCode());
 
         attributes.put("realm", realm);
         attributes.put("url", new UrlBean(realm, theme, session.getContext().getUri().getBaseUri(), null));
-        attributes.put("locale", new LocaleBean(realm, locale, session.getContext().getUri().getRequestUriBuilder(), messagesBundle));
-
+        attributes.put("locale", localeBean);
+        attributes.put("lang", lang);
 
         String errorKey = responseStatus == Response.Status.NOT_FOUND ? Messages.PAGE_NOT_FOUND : Messages.INTERNAL_SERVER_ERROR;
         String errorMessage = messagesBundle.getProperty(errorKey);
 
         attributes.put("message", new MessageBean(errorMessage, MessageType.ERROR));
+        // Default fallback in case an error occurs determining the dark mode later on.
+        attributes.put("darkMode", true);
 
         try {
             attributes.put("msg", new MessageFormatterMethod(locale, theme.getMessages(locale)));
@@ -202,7 +208,10 @@ public class KeycloakErrorHandler implements ExceptionMapper<Throwable> {
         }
 
         try {
-            attributes.put("properties", theme.getProperties());
+            Properties properties = theme.getProperties();
+            attributes.put("properties", properties);
+            attributes.put("darkMode", "true".equals(properties.getProperty("darkMode"))
+                    && realm.getAttribute("darkMode", true));
         } catch (IOException e) {
             e.printStackTrace();
         }

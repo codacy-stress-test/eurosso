@@ -38,6 +38,7 @@ import static org.keycloak.testsuite.util.ClientPoliciesUtil.createSecureClientA
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.MessageDigest;
@@ -573,7 +574,7 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
         CloseableHttpClient client = new DefaultHttpClient();
         try {
             HttpPost post = new HttpPost(requestUrl);
-            UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters, "UTF-8");
+            UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters, StandardCharsets.UTF_8);
             post.setEntity(formEntity);
             return client.execute(post);
         } finally {
@@ -660,7 +661,7 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
         events.expect(EventType.INTROSPECT_TOKEN).client(clientId).session(sessionId).user((String)null).clearDetails().assertEvent();
     }
 
-    protected void doTokenRevoke(String refreshToken, String clientId, String clientSecret, String userId, boolean isOfflineAccess) throws IOException {
+    protected void doTokenRevoke(String refreshToken, String clientId, String clientSecret, String userId, String sessionId, boolean isOfflineAccess) throws IOException {
         oauth.clientId(clientId);
         oauth.doTokenRevoke(refreshToken, "refresh_token", clientSecret);
 
@@ -671,7 +672,11 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
         if (isOfflineAccess) assertEquals("Offline user session not found", tokenRes.getErrorDescription());
         else assertEquals("Session not active", tokenRes.getErrorDescription());
 
-        events.expect(EventType.REVOKE_GRANT).clearDetails().client(clientId).user(userId).assertEvent();
+        events.expect(EventType.REVOKE_GRANT).clearDetails()
+                .client(clientId)
+                .user(userId)
+                .session(sessionId)
+                .assertEvent();
     }
 
     // Client CRUD operation by Admin REST API primitives
@@ -1531,7 +1536,7 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
 
         doIntrospectAccessToken(refreshResponse, userName, clientId, sessionId, clientSecret);
 
-        doTokenRevoke(refreshResponse.getRefreshToken(), clientId, clientSecret, userId, false);
+        doTokenRevoke(refreshResponse.getRefreshToken(), clientId, clientSecret, userId, sessionId, false);
     }
 
     protected void failLoginByNotFollowingPKCE(String clientId) {

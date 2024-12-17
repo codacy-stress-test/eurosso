@@ -75,6 +75,8 @@ public class CachedRealm extends AbstractExtendableRevisioned {
     protected boolean identityFederationEnabled;
     protected boolean editUsernameAllowed;
     protected boolean organizationsEnabled;
+    protected boolean adminPermissionsEnabled;
+    protected boolean verifiableCredentialsEnabled;
     //--- brute force settings
     protected boolean bruteForceProtected;
     protected boolean permanentLockout;
@@ -159,6 +161,7 @@ public class CachedRealm extends AbstractExtendableRevisioned {
     protected boolean adminEventsEnabled;
     protected boolean adminEventsDetailsEnabled;
     protected String defaultRoleId;
+    protected String adminPermissionsClientId;
     private boolean allowUserManagedAccess;
 
     protected List<String> defaultGroups;
@@ -191,6 +194,8 @@ public class CachedRealm extends AbstractExtendableRevisioned {
         resetPasswordAllowed = model.isResetPasswordAllowed();
         editUsernameAllowed = model.isEditUsernameAllowed();
         organizationsEnabled = model.isOrganizationsEnabled();
+        adminPermissionsEnabled = model.isAdminPermissionsEnabled();
+        verifiableCredentialsEnabled = model.isVerifiableCredentialsEnabled();
         //--- brute force settings
         bruteForceProtected = model.isBruteForceProtected();
         permanentLockout = model.isPermanentLockout();
@@ -253,6 +258,7 @@ public class CachedRealm extends AbstractExtendableRevisioned {
 
         adminEventsEnabled = model.isAdminEventsEnabled();
         adminEventsDetailsEnabled = model.isAdminEventsDetailsEnabled();
+        adminPermissionsClientId = model.getAdminPermissionsClient() == null ? null : model.getAdminPermissionsClient().getId();
 
         if(Objects.isNull(model.getDefaultRole())) {
             throw new ModelException("Default Role is null for Realm " + name);
@@ -333,6 +339,10 @@ public class CachedRealm extends AbstractExtendableRevisioned {
 
     public String getDefaultRoleId() {
         return defaultRoleId;
+    }
+
+    public String getAdminPermissionsClientId() {
+        return adminPermissionsClientId;
     }
 
     public String getName() {
@@ -429,6 +439,14 @@ public class CachedRealm extends AbstractExtendableRevisioned {
 
     public boolean isOrganizationsEnabled() {
         return organizationsEnabled;
+    }
+
+    public boolean isAdminPermissionsEnabled() {
+        return adminPermissionsEnabled;
+    }
+
+    public boolean isVerifiableCredentialsEnabled() {
+        return verifiableCredentialsEnabled;
     }
 
     public String getDefaultSignatureAlgorithm() {
